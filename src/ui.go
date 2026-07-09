@@ -59,6 +59,17 @@ func (b Button) Render() {
 		float32(textSize), 4.0, color)
 }
 
+var liveInfoY float32 = 0
+
+func LiveInfoFrameReset() {
+	liveInfoY = 0
+}
+
+func LiveInfo(text string) {
+	DrawText(text, 0, liveInfoY, 24, rl.White)
+	liveInfoY += 24
+}
+
 func DrawText(text string, x float32, y float32, size int, color rl.Color) {
 	rl.DrawTextEx(
 		*uiFont, text,

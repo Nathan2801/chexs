@@ -1,2 +1,3 @@
 *.exe
 main.wasm
+.nvim.lua
