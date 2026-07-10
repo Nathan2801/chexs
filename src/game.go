@@ -158,7 +158,7 @@ func (tile *Tile) iterateConnectedTiles(callback func (*Tile)) {
 }
 
 // offseted position refers to tile position when it is being dragged around
-func (tile Tile) OffsetedPosition() rl.Vector2 {
+func (tile Tile) offsetedPosition() rl.Vector2 {
 	return rl.Vector2{
 		tile.position.X + tile.moveOffset.X,
 		tile.position.Y + tile.moveOffset.Y,
@@ -170,7 +170,7 @@ func (tile Tile) Render(highlight bool) {
 	if highlight {
 		color = rl.ColorBrightness(color, 0.2)
 	}
-	position := tile.OffsetedPosition()
+	position := tile.offsetedPosition()
 	drawHexTile(position.X, position.Y, tileDefaultDistance, color, highlight)
 }
 
@@ -318,7 +318,7 @@ func gridAreaFromPoints(points []rl.Vector2) (rl.Rectangle, float32) {
 	}, offset
 }
 
-func (grid HexGrid) PointPosition(point rl.Vector2) rl.Vector2 {
+func (grid HexGrid) pointPosition(point rl.Vector2) rl.Vector2 {
 	return rl.Vector2{
 		point.X + grid.position.X,
 		point.Y + grid.position.Y + grid.areaOffset,
@@ -327,7 +327,7 @@ func (grid HexGrid) PointPosition(point rl.Vector2) rl.Vector2 {
 
 func (grid HexGrid) Render() {
 	for _, point := range grid.points {
-		pointPosition := grid.PointPosition(point)
+		pointPosition := grid.pointPosition(point)
 		rl.DrawCircle(
 			int32(pointPosition.X),
 			int32(pointPosition.Y),
@@ -380,7 +380,7 @@ func selectTile(tiles []*Tile, mousePosition rl.Vector2) *Tile {
 		if tile == nil {
 			continue
 		}
-		tilePosition := tile.OffsetedPosition()
+		tilePosition := tile.offsetedPosition()
 		if rl.Vector2Distance(mousePosition, tilePosition) < tileDefaultDistance {
 			return tile
 		}
@@ -393,8 +393,8 @@ func closestSnapPoint(tile *Tile, grid HexGrid) rl.Vector2 {
 	closestPoint := rl.Vector2Zero()
 	closestDistance := float32(math.MaxFloat32)
 	for _, point := range grid.points {
-		tilePosition := tile.OffsetedPosition()
-		pointPosition := grid.PointPosition(point)
+		tilePosition := tile.offsetedPosition()
+		pointPosition := grid.pointPosition(point)
 		distance := rl.Vector2Distance(tilePosition, pointPosition)
 		if distance < closestDistance {
 			closestPoint = pointPosition
