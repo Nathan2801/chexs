@@ -87,7 +87,7 @@ func hexFaceAngle(d Direction) float64 {
 	return math.Pi*2.0/6.0*float64(d) + math.Pi*0.5
 }
 
-func drawHexTile(x, y, distance float32, color rl.Color) {
+func drawHexTile(x, y, distance float32, color rl.Color, isSelected bool) {
 	verts := []rl.Vector2{}
 	faces := []rl.Vector2{}
 
@@ -103,7 +103,12 @@ func drawHexTile(x, y, distance float32, color rl.Color) {
 		faces = append(faces, rl.Vector2{x + tX, y + tY})
 	}
 
-	rl.DrawCircle(int32(x), int32(y), 2.0, rl.White)
+	centerColor := rl.White
+	if isSelected {
+		centerColor = rl.Red
+	}
+	rl.DrawCircle(int32(x), int32(y), 2.0, centerColor)
+
 	for i := 0; i < len(verts); i++ {
 		pointA := verts[i]
 
@@ -152,20 +157,21 @@ func (tile *Tile) iterateConnectedTiles(callback func (*Tile)) {
 	tile.visited = false
 }
 
-func (tile Tile) offsetedPosition() rl.Vector2 {
+// offseted position refers to tile position when it is being dragged around
+func (tile Tile) OffsetedPosition() rl.Vector2 {
 	return rl.Vector2{
 		tile.position.X + tile.moveOffset.X,
 		tile.position.Y + tile.moveOffset.Y,
 	}
 }
 
-func (tile Tile) DrawTile(highlight bool) {
+func (tile Tile) Render(highlight bool) {
 	color := tile.color
 	if highlight {
 		color = rl.ColorBrightness(color, 0.2)
 	}
-	position := tile.offsetedPosition()
-	drawHexTile(position.X, position.Y, tileDefaultDistance, color)
+	position := tile.OffsetedPosition()
+	drawHexTile(position.X, position.Y, tileDefaultDistance, color, highlight)
 }
 
 func (tile *Tile) move(x, y float32) {
@@ -198,10 +204,6 @@ func (tile *Tile) createNeighbor(direction Direction, piece int) {
 
 	opposite := direction.opposite()
 	neighbor.neighbors[int(opposite)] = tile
-}
-
-type Board struct {
-	tiles []*Tile
 }
 
 type Menu struct {
@@ -316,17 +318,32 @@ func gridAreaFromPoints(points []rl.Vector2) (rl.Rectangle, float32) {
 	}, offset
 }
 
+func (grid HexGrid) PointPosition(point rl.Vector2) rl.Vector2 {
+	return rl.Vector2{
+		point.X + grid.position.X,
+		point.Y + grid.position.Y + grid.areaOffset,
+	}
+}
+
 func (grid HexGrid) Render() {
 	for _, point := range grid.points {
+		pointPosition := grid.PointPosition(point)
 		rl.DrawCircle(
-			int32(point.X) + int32(grid.position.X),
-			int32(point.Y) + int32(grid.position.Y) + int32(grid.areaOffset),
+			int32(pointPosition.X),
+			int32(pointPosition.Y),
 			2.0, rl.White)
 	}
 }
 
+// even tho board has a single element we define it like this so tile can have
+// a pointer to a board instead of having a pointer to a list of pointer tiles
+type Board struct {
+	tiles []*Tile
+}
+
 type Game struct {
 	board Board
+	tiles []*Tile
 	grid HexGrid
 	hoveredTile *Tile  // hovered tile used to highlight tile under cursor
 	selectedTile *Tile // selected tile refers to the first tile being moved
@@ -363,12 +380,29 @@ func selectTile(tiles []*Tile, mousePosition rl.Vector2) *Tile {
 		if tile == nil {
 			continue
 		}
-		tilePosition := tile.offsetedPosition() // offset position needed when dragging
+		tilePosition := tile.OffsetedPosition()
 		if rl.Vector2Distance(mousePosition, tilePosition) < tileDefaultDistance {
 			return tile
 		}
 	}
 	return nil
+}
+
+func closestSnapPoint(tile *Tile, grid HexGrid) rl.Vector2 {
+	pointFound := false
+	closestPoint := rl.Vector2Zero()
+	closestDistance := float32(math.MaxFloat32)
+	for _, point := range grid.points {
+		tilePosition := tile.OffsetedPosition()
+		pointPosition := grid.PointPosition(point)
+		distance := rl.Vector2Distance(tilePosition, pointPosition)
+		if distance < closestDistance {
+			closestPoint = pointPosition
+			closestDistance = distance
+		}
+	}
+	assert(!pointFound, "Point not found")
+	return closestPoint
 }
 
 func (s *Game) Update(_delta float32) {
@@ -386,7 +420,11 @@ func (s *Game) Update(_delta float32) {
 	}
 
 	if rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
-		if s.selectedTile != nil {
+		tile := s.selectedTile
+		if tile != nil {
+			closestSnap := closestSnapPoint(tile, s.grid)
+			snapOffset := rl.Vector2Subtract(closestSnap, tile.position)
+			s.selectedTile.move(snapOffset.X, snapOffset.Y)
 			s.selectedTile.applyMove()
 		}
 		s.movingOrigin = rl.Vector2Zero()
@@ -407,9 +445,23 @@ func (s Game) Render() {
 	rl.ClearBackground(background)
 
 	LiveInfoFrameReset()
-	LiveInfo(fmt.Sprint("fps: ", rl.GetFPS()))
-	LiveInfo(fmt.Sprint("tiles: ", len(s.board.tiles)))
-	LiveInfo(fmt.Sprint("grid area: ", s.grid.area))
+
+	infoFps := fmt.Sprint("fps: ", rl.GetFPS())
+	LiveInfo(infoFps)
+
+	infoTiles := fmt.Sprint("tiles: ", len(s.board.tiles))
+	LiveInfo(infoTiles)
+
+	infoArea := fmt.Sprint("area: ", s.grid.area)
+	LiveInfo(infoArea)
+
+	infoSnap := "snap: No tile selected"
+	if s.selectedTile != nil {
+		closestSnap := closestSnapPoint(s.selectedTile, s.grid)
+		infoSnap = fmt.Sprint("snap: ", closestSnap)
+		rl.DrawCircleV(closestSnap, 4.0, rl.Yellow)
+	}
+	LiveInfo(infoSnap)
 
 	area := s.grid.area
 	area.X += s.grid.position.X
@@ -419,7 +471,7 @@ func (s Game) Render() {
 	s.grid.Render()
 	for _, tile := range s.board.tiles {
 		highlight := tile == s.hoveredTile
-		tile.DrawTile(highlight)
+		tile.Render(highlight)
 	}
 }
 
