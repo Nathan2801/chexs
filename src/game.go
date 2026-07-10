@@ -27,12 +27,16 @@ const halfHeight = screenHeight/2
 
 var gameFont rl.Font
 var shouldQuit = false
+
 var target rl.RenderTexture2D
-var currentScreen = ScreenIndexGame
-var background = rl.GetColor(0x282828FF)
 var cursor = rl.MouseCursorDefault
+
+var background = rl.GetColor(0x282828FF)
+
 var menuScreen = createMenu()
 var gameScreen = createGame()
+
+var currentScreen = ScreenIndexGame
 
 func assert(condition bool, message string) {
 	if !condition {
@@ -83,7 +87,7 @@ func hexFaceAngle(d Direction) float64 {
 	return math.Pi*2.0/6.0*float64(d) + math.Pi*0.5
 }
 
-func drawHexTile(x, y, distance float32, color rl.Color, neighbors bool) {
+func drawHexTile(x, y, distance float32, color rl.Color) {
 	verts := []rl.Vector2{}
 	faces := []rl.Vector2{}
 
@@ -110,13 +114,6 @@ func drawHexTile(x, y, distance float32, color rl.Color, neighbors bool) {
 
 		pointB := verts[pointBIndex]
 		rl.DrawLineEx(pointA, pointB, 2.0, color)
-	}
-
-	if neighbors {
-		for i := 0; i < len(faces); i++ {
-			face := faces[i]
-			drawHexTile(face.X, face.Y, distance, color, false)
-		}
 	}
 }
 
@@ -162,16 +159,13 @@ func (tile Tile) offsetedPosition() rl.Vector2 {
 	}
 }
 
-func (tile Tile) drawTile(highlight bool) {
+func (tile Tile) DrawTile(highlight bool) {
 	color := tile.color
 	if highlight {
 		color = rl.ColorBrightness(color, 0.2)
 	}
 	position := tile.offsetedPosition()
-	drawHexTile(
-		position.X, position.Y,
-		tileDefaultDistance,
-		color, false)
+	drawHexTile(position.X, position.Y, tileDefaultDistance, color)
 }
 
 func (tile *Tile) move(x, y float32) {
@@ -425,7 +419,7 @@ func (s Game) Render() {
 	s.grid.Render()
 	for _, tile := range s.board.tiles {
 		highlight := tile == s.hoveredTile
-		tile.drawTile(highlight)
+		tile.DrawTile(highlight)
 	}
 }
 
