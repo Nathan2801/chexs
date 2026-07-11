@@ -79,6 +79,13 @@ func (direction Direction) opposite() Direction {
 	return Direction((int(direction) + 3) % (int(DownRight) + 1))
 }
 
+type Piece int
+
+const (
+	Empty Piece = iota
+	Pawn
+)
+
 func hexVertAngle(d Direction) float64 {
 	return math.Pi*2.0/6.0*float64(d)
 }
@@ -87,9 +94,67 @@ func hexFaceAngle(d Direction) float64 {
 	return math.Pi*2.0/6.0*float64(d) + math.Pi*0.5
 }
 
-func drawHexTile(x, y, distance float32, color rl.Color, isSelected bool) {
+type Tile struct {
+	piece Piece
+	board *Board
+	color rl.Color
+	position rl.Vector2
+	moveOffset rl.Vector2
+	moveOffsetApplied bool
+	neighbors [6]*Tile
+	visited bool // whether tile was visited in a iteration
+}
+
+func createTile(board *Board, x, y float32, color rl.Color, piece Piece) *Tile {
+	board.tiles = append(board.tiles, &Tile{
+		piece: piece,
+		board: board,
+		color: color,
+		position: rl.Vector2{x, y},
+	})
+	return board.tiles[len(board.tiles) - 1]
+}
+
+// @note: allow callback parameter allow us to include or exclude the passed
+// tile
+func (tile *Tile) iterateConnectedTiles(callback func (*Tile), allowCallback bool) {
+	if tile.visited {
+		return
+	}
+	if allowCallback {
+		callback(tile)
+	}
+	tile.visited = true
+	for _, neighbor := range tile.neighbors {
+		if neighbor == nil {
+			continue
+		}
+		neighbor.iterateConnectedTiles(callback, true)
+	}
+	tile.visited = false
+}
+
+// offseted position refers to tile position when it is being dragged around
+func (tile Tile) offsetedPosition() rl.Vector2 {
+	return rl.Vector2{
+		tile.position.X + tile.moveOffset.X,
+		tile.position.Y + tile.moveOffset.Y,
+	}
+}
+
+func (tile Tile) isMoving() bool {
+	return tile.moveOffset != rl.Vector2Zero()
+}
+
+func (tile *Tile) Render(highlight bool, gameMode Mode) {
 	verts := []rl.Vector2{}
 	faces := []rl.Vector2{}
+
+	distance := tileDefaultDistance
+	position := tile.offsetedPosition()
+
+	x := position.X
+	y := position.Y
 
 	for i := 0; i < 6; i++ {
 		angle := hexVertAngle(Direction(i))
@@ -104,10 +169,15 @@ func drawHexTile(x, y, distance float32, color rl.Color, isSelected bool) {
 	}
 
 	centerColor := rl.White
-	if isSelected {
+	if highlight {
 		centerColor = rl.Red
 	}
-	rl.DrawCircle(int32(x), int32(y), 2.0, centerColor)
+	rl.DrawCircleV(position, 2.0, centerColor)
+
+	color := tile.color
+	if highlight {
+		color = rl.ColorBrightness(color, 0.2)
+	}
 
 	for i := 0; i < len(verts); i++ {
 		pointA := verts[i]
@@ -120,80 +190,43 @@ func drawHexTile(x, y, distance float32, color rl.Color, isSelected bool) {
 		pointB := verts[pointBIndex]
 		rl.DrawLineEx(pointA, pointB, 2.0, color)
 	}
-}
 
-type Tile struct {
-	piece int
-	board *Board
-	color rl.Color
-	position rl.Vector2
-	moveOffset rl.Vector2
-	moveOffsetApplied bool
-	neighbors [6]*Tile
-	visited bool // whether tile was visited in a iteration
-}
-
-func createTile(board *Board, x, y float32, color rl.Color, piece int) *Tile {
-	board.tiles = append(board.tiles, &Tile{
-		board: board,
-		color: color,
-		position: rl.Vector2{x, y},
-	})
-	return board.tiles[len(board.tiles) - 1]
-}
-
-func (tile *Tile) iterateConnectedTiles(callback func (*Tile)) {
-	if tile.visited {
-		return
+	switch tile.piece {
+	case Pawn:
+		rl.DrawRectangleRec(rl.Rectangle{x - 10, y - 10, 20, 20}, rl.White)
 	}
-	callback(tile)
-	tile.visited = true
-	for _, neighbor := range tile.neighbors {
-		if neighbor == nil {
-			continue
+
+	isSolveMode := gameMode == ModeSolve
+	mouseOverPiece := highlight && tile.piece != Empty
+	if mouseOverPiece && isSolveMode && !tile.isMoving() {
+		tiles := possibleMoves(tile)
+		for _, it := range tiles {
+			assert(it != tile, "Cannot highlight same tile")
+			rl.DrawCircleV(it.position, 4.0, rl.Green)
 		}
-		neighbor.iterateConnectedTiles(callback)
 	}
-	tile.visited = false
-}
-
-// offseted position refers to tile position when it is being dragged around
-func (tile Tile) offsetedPosition() rl.Vector2 {
-	return rl.Vector2{
-		tile.position.X + tile.moveOffset.X,
-		tile.position.Y + tile.moveOffset.Y,
-	}
-}
-
-func (tile Tile) Render(highlight bool) {
-	color := tile.color
-	if highlight {
-		color = rl.ColorBrightness(color, 0.2)
-	}
-	position := tile.offsetedPosition()
-	drawHexTile(position.X, position.Y, tileDefaultDistance, color, highlight)
 }
 
 func (tile *Tile) move(x, y float32) {
-	tile.iterateConnectedTiles(func (tile *Tile) {
-		tile.moveOffset.X = x
-		tile.moveOffset.Y = y
-	})
+	tile.iterateConnectedTiles(func (it *Tile) {
+		it.moveOffset.X = x
+		it.moveOffset.Y = y
+	}, true)
 }
 
 func (tile *Tile) applyMove() {
-	tile.iterateConnectedTiles(func (tile *Tile) {
-		tile.position.X += tile.moveOffset.X
-		tile.position.Y += tile.moveOffset.Y
-		tile.cancelMove()
-	})
+	tile.iterateConnectedTiles(func (it *Tile) {
+		it.position.X += it.moveOffset.X
+		it.position.Y += it.moveOffset.Y
+		it.cancelMove()
+	}, true)
 }
 
 func (tile *Tile) cancelMove() {
 	tile.moveOffset = rl.Vector2Zero()
 }
 
-func (tile *Tile) createNeighbor(direction Direction, piece int) {
+func (tile *Tile) createNeighbor(direction Direction, piece Piece) {
 	angle := hexFaceAngle(direction)
 
 	neighborX := tile.position.X + float32(math.Cos(angle))*tileDefaultDistance*2.0
@@ -248,6 +281,8 @@ func (s Menu) Render() {
 	s.quitButton.Render()
 }
 
+// @todo: fix naming convention, here we specify HexGrid but tile we call it
+// Tile not HexTile
 type HexGrid struct {
 	cols int32
 	rows int32
@@ -335,13 +370,30 @@ func (grid HexGrid) Render() {
 	}
 }
 
-// even tho board has a single element we define it like this so tile can have
-// a pointer to a board instead of having a pointer to a list of pointer tiles
+// @note: even tho board has a single element we define it like this so tile
+// can have a pointer to a board instead of having a pointer to a list of
+// pointer tiles
 type Board struct {
 	tiles []*Tile
 }
 
+type Mode int
+
+const (
+	ModeBuild Mode = iota
+	ModeSolve
+)
+
+func (mode Mode) String() string {
+	switch mode {
+	case ModeBuild: return "ModeBuild"
+	case ModeSolve: return "ModeSolve"
+	default: return ""
+	}
+}
+
 type Game struct {
+	mode Mode
 	board Board
 	tiles []*Tile
 	grid HexGrid
@@ -353,14 +405,14 @@ type Game struct {
 func createGame() Game {
 	board := Board{}
 
-	tilesA := createTile(&board, halfWidth*1.5, halfHeight*1.5, rl.Red, 1)
+	tilesA := createTile(&board, halfWidth*1.5, halfHeight*1.5, rl.Red, Empty)
 	for i := 0; i < 3; i++ {
-		tilesA.createNeighbor(Direction(i), 1)
+		tilesA.createNeighbor(Direction(i), Empty)
 	}
 
-	tilesB := createTile(&board, halfWidth*0.5, halfHeight*0.5, rl.Blue, 2)
+	tilesB := createTile(&board, halfWidth*0.5, halfHeight*0.5, rl.Blue, Pawn)
 	for i := 0; i < 3; i++ {
-		tilesB.createNeighbor(Direction(i*2), 1)
+		tilesB.createNeighbor(Direction(i*2), Empty)
 	}
 
 	grid := createGrid(screenWidth*0.25, screenHeight*0.25, 5, 5)
@@ -370,9 +422,23 @@ func createGame() Game {
 	}
 
 	return Game{
+		mode: ModeBuild,
 		grid: grid,
 		board: board,
 	}
+}
+
+func possibleMoves(tile *Tile) []*Tile {
+	tiles := []*Tile{}
+	switch tile.piece {
+	case Empty:
+		return tiles
+	case Pawn:
+		tile.iterateConnectedTiles(func (neighbor *Tile) {
+			tiles = append(tiles, neighbor)
+		}, false)
+	}
+	return tiles
 }
 
 func selectTile(tiles []*Tile, mousePosition rl.Vector2) *Tile {
@@ -410,31 +476,49 @@ func (s *Game) Update(_delta float32) {
 	s.hoveredTile = selectTile(s.board.tiles, mousePosition)
 
 	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
-		if s.selectedTile == nil {
-			s.movingOrigin = rl.GetMousePosition()
-		}
-		s.selectedTile = selectTile(s.board.tiles, mousePosition)
-		if s.selectedTile == nil {
-			s.movingOrigin = rl.Vector2Zero()
+		switch s.mode {
+		case ModeBuild:
+			if s.selectedTile == nil {
+				s.movingOrigin = rl.GetMousePosition()
+			}
+			s.selectedTile = selectTile(s.board.tiles, mousePosition)
+			if s.selectedTile == nil {
+				s.movingOrigin = rl.Vector2Zero()
+			}
 		}
 	}
 
 	if rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
-		tile := s.selectedTile
-		if tile != nil {
-			closestSnap := closestSnapPoint(tile, s.grid)
-			snapOffset := rl.Vector2Subtract(closestSnap, tile.position)
-			s.selectedTile.move(snapOffset.X, snapOffset.Y)
-			s.selectedTile.applyMove()
+		switch s.mode {
+		case ModeBuild:
+			tile := s.selectedTile
+			if tile != nil {
+				closestSnap := closestSnapPoint(tile, s.grid)
+				snapOffset := rl.Vector2Subtract(closestSnap, tile.position)
+				s.selectedTile.move(snapOffset.X, snapOffset.Y)
+				s.selectedTile.applyMove()
+			}
+			s.movingOrigin = rl.Vector2Zero()
+			s.selectedTile = nil
 		}
-		s.movingOrigin = rl.Vector2Zero()
-		s.selectedTile = nil
+	}
+
+	if rl.IsKeyPressed(rl.KeySpace) {
+		switch s.mode {
+		case ModeBuild:
+			s.mode = ModeSolve
+		case ModeSolve:
+			s.mode = ModeBuild
+		}
 	}
 
 	if s.selectedTile != nil {
-		moveDistance := rl.Vector2Subtract(mousePosition, s.movingOrigin)
-		if s.selectedTile != nil {
-			s.selectedTile.move(moveDistance.X, moveDistance.Y)
+		switch s.mode {
+		case ModeBuild:
+			moveDistance := rl.Vector2Subtract(mousePosition, s.movingOrigin)
+			if s.selectedTile != nil {
+				s.selectedTile.move(moveDistance.X, moveDistance.Y)
+			}
 		}
 	}
 }
@@ -455,6 +539,9 @@ func (s Game) Render() {
 	infoArea := fmt.Sprint("area: ", s.grid.area)
 	LiveInfo(infoArea)
 
+	infoMode := fmt.Sprint("mode: ", s.mode)
+	LiveInfo(infoMode)
+
 	infoSnap := "snap: No tile selected"
 	if s.selectedTile != nil {
 		closestSnap := closestSnapPoint(s.selectedTile, s.grid)
@@ -471,7 +558,7 @@ func (s Game) Render() {
 	s.grid.Render()
 	for _, tile := range s.board.tiles {
 		highlight := tile == s.hoveredTile
-		tile.Render(highlight)
+		tile.Render(highlight, s.mode)
 	}
 }
 
