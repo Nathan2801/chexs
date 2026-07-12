@@ -42,9 +42,10 @@ const halfWidth = screenWidth/2
 const halfHeight = screenHeight/2
 
 var debug = false
+var shouldQuit = false
 
 var gameFont rl.Font
-var shouldQuit = false
+var pawnTexture rl.Texture2D
 
 var target rl.RenderTexture2D
 var cursor = rl.MouseCursorDefault
@@ -224,12 +225,12 @@ func (tile Tile) onlyRender(highlight bool) {
 func (tile Tile) onlyRenderPiece() {
 	position := tile.offsetedPosition()
 
-	x := position.X
-	y := position.Y
+	position.X -= 25
+	position.Y -= 28
 
 	switch tile.piece {
 	case Pawn: {
-		rl.DrawRectangleLinesEx(rl.Rectangle{x - 10, y - 10, 20, 20}, 2.0, rl.White)
+		rl.DrawTextureEx(pawnTexture, position, 0.0, 2.0, rl.White)
 	}}
 }
 
@@ -340,14 +341,14 @@ func (s Menu) Render() {
 
 	author := "Johnathan"
 	size := measureText(author, FontSizeS)
-	x := screenWidth  - size.X - 20.0
-	y := screenHeight - size.Y - 20.0
+	x := screenWidth  - size.X     - 20.0
+	y := screenHeight - size.Y*2.0 - 20.0
 	DrawText(author, x, y, FontSizeS, rl.White)
 
-	version := "rayjam.1.0"
+	version := "raylib 6.x gamejam"
 	size = measureText(version, FontSizeS)
 	x = screenWidth  - size.X     - 20.0
-	y = screenHeight - size.Y*2.0 - 20.0
+	y = screenHeight - size.Y*1.0 - 20.0
 	DrawText(version, x, y, FontSizeS, rl.White)
 
 	s.playButton.Render()
@@ -1043,6 +1044,9 @@ func RunGame() {
 
 	gameFont = rl.LoadFontEx("./assets/arvo/Arvo-Bold.ttf", 96, nil, 250)
 	defer rl.UnloadFont(gameFont)
+
+	pawnTexture = rl.LoadTexture("./assets/pieces/pawn.png")
+	defer rl.UnloadTexture(pawnTexture)
 
 	SetUIFont(&gameFont)
 
