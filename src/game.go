@@ -146,7 +146,7 @@ func (tile Tile) isMoving() bool {
 	return tile.moveOffset != rl.Vector2Zero()
 }
 
-func (tile *Tile) Render(highlight bool, gameMode Mode) {
+func (tile *Tile) Render(game Game) {
 	verts := []rl.Vector2{}
 	faces := []rl.Vector2{}
 
@@ -167,6 +167,8 @@ func (tile *Tile) Render(highlight bool, gameMode Mode) {
 		tY := float32(math.Sin(tAngle))*distance*2.0
 		faces = append(faces, rl.Vector2{x + tX, y + tY})
 	}
+
+	highlight := tile == game.hoveredTile
 
 	centerColor := rl.White
 	if highlight {
@@ -196,9 +198,12 @@ func (tile *Tile) Render(highlight bool, gameMode Mode) {
 		rl.DrawRectangleRec(rl.Rectangle{x - 10, y - 10, 20, 20}, rl.White)
 	}
 
-	isSolveMode := gameMode == ModeSolve
-	mouseOverPiece := highlight && tile.piece != Empty
-	if mouseOverPiece && isSolveMode && !tile.isMoving() {
+	drawPossibleMoves := (
+		tile.piece != Empty &&
+		(tile == game.selectedTile || tile == game.hoveredTile) &&
+		game.mode == ModeSolve)
+
+	if drawPossibleMoves {
 		tiles := possibleMoves(tile)
 		for _, it := range tiles {
 			assert(it != tile, "Cannot highlight same tile")
@@ -377,6 +382,13 @@ type Board struct {
 	tiles []*Tile
 }
 
+func (board *Board) isTileNeighbor(tileA, tileB *Tile) bool {
+	tileAPosition := tileA.offsetedPosition()
+	tileBPosition := tileB.offsetedPosition()
+	distance := rl.Vector2Distance(tileAPosition, tileBPosition)
+	return distance <= tileDefaultDistance*2.1 // @hack: 2.1 for error correction
+}
+
 type Mode int
 
 const (
@@ -428,15 +440,36 @@ func createGame() Game {
 	}
 }
 
+func moveTilePiece(tile *Tile, newTile *Tile) bool {
+	assert(tile != nil, "Tile is nil")
+	assert(newTile != nil, "End tile is nil")
+
+	moveMade := false
+	for _, it := range possibleMoves(tile) {
+		if it == newTile {
+			moveMade = true
+			newTile.piece = tile.piece
+			tile.piece = Empty
+		}
+	}
+	return moveMade
+}
+
 func possibleMoves(tile *Tile) []*Tile {
 	tiles := []*Tile{}
 	switch tile.piece {
 	case Empty:
 		return tiles
 	case Pawn:
-		tile.iterateConnectedTiles(func (neighbor *Tile) {
-			tiles = append(tiles, neighbor)
-		}, false)
+		board := tile.board
+		for _, it := range board.tiles {
+			if it == tile {
+				continue
+			}
+			if board.isTileNeighbor(tile, it) {
+				tiles = append(tiles, it)
+			}
+		}
 	}
 	return tiles
 }
@@ -471,59 +504,78 @@ func closestSnapPoint(tile *Tile, grid HexGrid) rl.Vector2 {
 	return closestPoint
 }
 
-func (s *Game) Update(_delta float32) {
+func (game *Game) Update(_delta float32) {
 	mousePosition := rl.GetMousePosition()
-	s.hoveredTile = selectTile(s.board.tiles, mousePosition)
+	game.hoveredTile = selectTile(game.board.tiles, mousePosition)
 
-	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
-		switch s.mode {
+	if rl.IsMouseButtonDown(rl.MouseButtonLeft) {
+		switch game.mode {
 		case ModeBuild:
-			if s.selectedTile == nil {
-				s.movingOrigin = rl.GetMousePosition()
+			if game.selectedTile == nil {
+				game.movingOrigin = rl.GetMousePosition()
 			}
-			s.selectedTile = selectTile(s.board.tiles, mousePosition)
-			if s.selectedTile == nil {
-				s.movingOrigin = rl.Vector2Zero()
+			game.selectedTile = game.hoveredTile
+			if game.selectedTile == nil {
+				game.movingOrigin = rl.Vector2Zero()
 			}
 		}
 	}
 
 	if rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
-		switch s.mode {
+		switch game.mode {
 		case ModeBuild:
-			tile := s.selectedTile
-			if tile != nil {
-				closestSnap := closestSnapPoint(tile, s.grid)
-				snapOffset := rl.Vector2Subtract(closestSnap, tile.position)
-				s.selectedTile.move(snapOffset.X, snapOffset.Y)
-				s.selectedTile.applyMove()
+			if game.selectedTile != nil {
+				tile := game.selectedTile
+
+				closestSnap := closestSnapPoint(tile, game.grid)
+				snapOffset := rl.Vector2Subtract( closestSnap, tile.position)
+
+				game.selectedTile.move(snapOffset.X, snapOffset.Y)
+				game.selectedTile.applyMove()
 			}
-			s.movingOrigin = rl.Vector2Zero()
-			s.selectedTile = nil
+			game.movingOrigin = rl.Vector2Zero()
+			game.selectedTile = nil
+		case ModeSolve:
+			if game.selectedTile == nil {
+				game.selectedTile = game.hoveredTile
+			} else if game.hoveredTile == nil {
+				game.selectedTile = nil
+			} else {
+				if game.selectedTile != game.hoveredTile {
+					if moveTilePiece(game.selectedTile, game.hoveredTile) {
+						game.hoveredTile = nil
+						game.selectedTile = nil
+					}
+				}
+			}
 		}
 	}
 
 	if rl.IsKeyPressed(rl.KeySpace) {
-		switch s.mode {
+		switch game.mode {
 		case ModeBuild:
-			s.mode = ModeSolve
+			game.mode = ModeSolve
 		case ModeSolve:
-			s.mode = ModeBuild
+			game.mode = ModeBuild
+			if game.selectedTile != nil {
+				game.selectedTile.cancelMove()
+				game.selectedTile = nil
+			}
 		}
 	}
 
-	if s.selectedTile != nil {
-		switch s.mode {
+	if game.selectedTile != nil {
+		switch game.mode {
 		case ModeBuild:
-			moveDistance := rl.Vector2Subtract(mousePosition, s.movingOrigin)
-			if s.selectedTile != nil {
-				s.selectedTile.move(moveDistance.X, moveDistance.Y)
+			moveDistance := rl.Vector2Subtract(mousePosition, game.movingOrigin)
+			if game.selectedTile != nil {
+				game.selectedTile.move(moveDistance.X, moveDistance.Y)
 			}
 		}
 	}
 }
 
-func (s Game) Render() {
+func (game Game) Render() {
 	rl.BeginTextureMode(target)
 	defer rl.EndTextureMode()
 	rl.ClearBackground(background)
@@ -533,32 +585,32 @@ func (s Game) Render() {
 	infoFps := fmt.Sprint("fps: ", rl.GetFPS())
 	LiveInfo(infoFps)
 
-	infoTiles := fmt.Sprint("tiles: ", len(s.board.tiles))
+	infoTiles := fmt.Sprint("tiles: ", len(game.board.tiles))
 	LiveInfo(infoTiles)
 
-	infoArea := fmt.Sprint("area: ", s.grid.area)
+	infoArea := fmt.Sprint("area: ", game.grid.area)
 	LiveInfo(infoArea)
 
-	infoMode := fmt.Sprint("mode: ", s.mode)
+	infoMode := fmt.Sprint("mode: ", game.mode)
 	LiveInfo(infoMode)
 
+	infoHovered := fmt.Sprint("hovered: ", game.hoveredTile)
+	LiveInfo(infoHovered)
+
+	infoSelected := fmt.Sprint("selected: ", game.selectedTile)
+	LiveInfo(infoSelected)
+
 	infoSnap := "snap: No tile selected"
-	if s.selectedTile != nil {
-		closestSnap := closestSnapPoint(s.selectedTile, s.grid)
-		infoSnap = fmt.Sprint("snap: ", closestSnap)
-		rl.DrawCircleV(closestSnap, 4.0, rl.Yellow)
-	}
 	LiveInfo(infoSnap)
 
-	area := s.grid.area
-	area.X += s.grid.position.X
-	area.Y += s.grid.position.Y
+	area := game.grid.area
+	area.X += game.grid.position.X
+	area.Y += game.grid.position.Y
 	rl.DrawRectangleLinesEx(area, 2.0, rl.Red)
 
-	s.grid.Render()
-	for _, tile := range s.board.tiles {
-		highlight := tile == s.hoveredTile
-		tile.Render(highlight, s.mode)
+	game.grid.Render()
+	for _, tile := range game.board.tiles {
+		tile.Render(game)
 	}
 }
 
