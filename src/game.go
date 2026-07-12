@@ -121,8 +121,7 @@ func createTile(board *Board, x, y float32, color rl.Color, piece Piece) *Tile {
 	return board.tiles[len(board.tiles) - 1]
 }
 
-// @note: allow callback parameter allow us to include or exclude the passed
-// tile
+// @note: allow callback parameter allow us to include or not the passed tile
 func (tile *Tile) iterateConnectedTiles(callback func (*Tile), allowCallback bool) {
 	if tile.visited {
 		return
@@ -140,7 +139,7 @@ func (tile *Tile) iterateConnectedTiles(callback func (*Tile), allowCallback boo
 	tile.visited = false
 }
 
-// offseted position refers to tile position when it is being dragged around
+// @note: offseted position refers to tile position when being dragged around
 func (tile Tile) offsetedPosition() rl.Vector2 {
 	return rl.Vector2{
 		tile.position.X + tile.moveOffset.X,
@@ -533,7 +532,7 @@ func (game *Game) Update(_delta float32) {
 	mousePosition := rl.GetMousePosition()
 	game.hoveredTile = selectTile(game.board.tiles, mousePosition)
 
-	if rl.IsMouseButtonDown(rl.MouseButtonLeft) {
+	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 		switch game.mode {
 		case ModeBuild:
 			if game.selectedTile == nil {
