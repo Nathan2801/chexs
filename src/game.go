@@ -435,7 +435,7 @@ type Game struct {
 func createGame() Game {
 	board := Board{}
 
-	tilesA := createTile(&board, halfWidth*1.5, halfHeight*1.5, rl.Red, Empty)
+	tilesA := createTile(&board, halfWidth*1.5, halfHeight*1.5, rl.Red, Pawn)
 	for i := 0; i < 3; i++ {
 		tilesA.createNeighbor(Direction(i), Empty)
 	}
@@ -488,7 +488,9 @@ func possibleMoves(tile *Tile) []*Tile {
 				tiles = append(tiles, it)
 			}
 			if board.isTileDiagonal(tile, it) {
-				tiles = append(tiles, it)
+				if it.piece != Empty {
+					tiles = append(tiles, it)
+				}
 			}
 		}
 	}
