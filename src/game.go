@@ -23,6 +23,7 @@ const (
 	FontSizeS float32 = 24.0
 	FontSizeM = 32.0
 	FontSizeB = 40.0
+	FontSizeL = 64.0
 )
 
 const gameName = "CHEXS"
@@ -330,13 +331,22 @@ func (s Menu) Render() {
 
 	rl.ClearBackground(background)
 
-	titleFontSize := float32(64.0)
-	titleSize := rl.MeasureTextEx(gameFont, gameName, titleFontSize, 4)
-
+	titleSize := measureText(gameName, FontSizeL)
 	titleX := halfWidth - titleSize.X/2
 	titleY := halfHeight - titleSize.Y/2 - 64
+	DrawText(gameName, titleX, titleY, FontSizeL, rl.White)
 
-	DrawText(gameName, titleX, titleY, titleFontSize, rl.White)
+	author := "Johnathan"
+	size := measureText(author, FontSizeS)
+	x := screenWidth  - size.X - 20.0
+	y := screenHeight - size.Y - 20.0
+	DrawText(author, x, y, FontSizeS, rl.White)
+
+	version := "rayjam.1.0"
+	size = measureText(version, FontSizeS)
+	x = screenWidth  - size.X     - 20.0
+	y = screenHeight - size.Y*2.0 - 20.0
+	DrawText(version, x, y, FontSizeS, rl.White)
 
 	s.playButton.Render()
 	s.quitButton.Render()
@@ -854,12 +864,12 @@ func (game Game) renderLevelFailed() {
 	rl.DrawRectangleRec(screenArea, overlayColor)
 
 	text := "you failed!"
-	size := rl.MeasureTextEx(gameFont, text, 80.0, 4.0)
-	DrawText(text, halfWidth - size.X/2, halfHeight - size.Y/2, 80, foreground)
+	size := measureText(text, FontSizeB)
+	DrawText(text, halfWidth - size.X/2, halfHeight - size.Y/2, FontSizeB, foreground)
 
 	text = "space to retry"
-	size = rl.MeasureTextEx(gameFont, text, 40.0, 4.0)
-	DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*2, 40, foreground)
+	size = measureText(text, FontSizeS)
+	DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*1.1, FontSizeS, foreground)
 }
 
 func (game Game) renderLevelCompleted() {
@@ -868,12 +878,12 @@ func (game Game) renderLevelCompleted() {
 	rl.DrawRectangleRec(screenArea, overlayColor)
 
 	text := "you completed!"
-	size := rl.MeasureTextEx(gameFont, text, 80.0, 4.0)
-	DrawText(text, halfWidth - size.X/2, halfHeight - size.Y/2, 80, foreground)
+	size := measureText(text, FontSizeB)
+	DrawText(text, halfWidth - size.X/2, halfHeight - size.Y/2, FontSizeB, foreground)
 
 	text = "space to continue"
-	size = rl.MeasureTextEx(gameFont, text, 40.0, 4.0)
-	DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*2, 40, foreground)
+	size = measureText(text, FontSizeS)
+	DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*1.1, FontSizeS, foreground)
 }
 
 func (game Game) Render() {
@@ -916,17 +926,25 @@ func (game Game) Render() {
 		tile.Render(&game)
 	}
 
-	switchMode := ""
+	size := rl.Vector2{}
+	modeText := ""
+
 	switch game.mode {
-	case ModeBuild: switchMode = "space to solve"
-	case ModeSolve: switchMode = "space to build"
+	case ModeBuild:
+		modeText   = "build mode"
+	case ModeSolve:
+		modeText   = "solve mode"
 	}
 
-	size := rl.MeasureTextEx(gameFont, switchMode, 40.0, 4.0)
-	DrawText(switchMode, halfWidth - size.X/2, halfHeight*1.60, 40, rl.White)
+	size = measureText(modeText, FontSizeM)
+	DrawText(modeText, halfWidth - size.X/2, screenHeight*0.8, FontSizeM, rl.White)
+
+	text := "space to switch"
+	size = measureText(text, FontSizeS)
+	DrawText(text, halfWidth - size.X/2, screenHeight*0.8 + FontSizeM*1.1, FontSizeS, rl.White)
 
 	movesLeft := fmt.Sprint("moves left: ", game.movesLeft)
-	DrawText(movesLeft, 20.0, 20.0, 32, rl.White)
+	DrawText(movesLeft, 20.0, 20.0, FontSizeM, rl.White)
 
 	if game.state == StateFailed {
 		game.renderLevelFailed()
