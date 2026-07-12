@@ -485,7 +485,9 @@ func possibleMoves(tile *Tile) []*Tile {
 				continue
 			}
 			if board.isTileNeighbor(tile, it) {
-				tiles = append(tiles, it)
+				if it.piece == Empty {
+					tiles = append(tiles, it)
+				}
 			}
 			if board.isTileDiagonal(tile, it) {
 				if it.piece != Empty {
