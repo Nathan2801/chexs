@@ -31,18 +31,21 @@ const screenHeight = 720
 const halfWidth = screenWidth/2
 const halfHeight = screenHeight/2
 
+var debug = false
+
 var gameFont rl.Font
 var shouldQuit = false
 
 var target rl.RenderTexture2D
 var cursor = rl.MouseCursorDefault
 
+var foreground = rl.GetColor(0xCCCCCCFF)
 var background = rl.GetColor(0x282828FF)
 
 var menuScreen = createMenu()
-var gameScreen = createGame()
+var gameScreen Game
 
-var currentScreen = ScreenIndexGame
+var currentScreen = ScreenIndexMenu
 
 func assert(condition bool, message string) {
 	if !condition {
@@ -51,6 +54,7 @@ func assert(condition bool, message string) {
 }
 
 func play() {
+	gameScreen = createLevel1()
 	currentScreen = ScreenIndexGame
 }
 
@@ -175,11 +179,14 @@ func (tile *Tile) Render(game Game) {
 
 	highlight := tile == game.hoveredTile
 
-	centerColor := rl.White
-	if highlight {
-		centerColor = rl.Red
+	// @note: debug center of tiles
+	if debug {
+		centerColor := rl.White
+		if highlight {
+			centerColor = rl.Red
+		}
+		rl.DrawCircleV(position, 2.0, centerColor)
 	}
-	rl.DrawCircleV(position, 2.0, centerColor)
 
 	color := tile.color
 	if highlight {
@@ -417,44 +424,83 @@ func (mode Mode) String() string {
 	switch mode {
 	case ModeBuild: return "ModeBuild"
 	case ModeSolve: return "ModeSolve"
-	default: return ""
+	default:        return ""
+	}
+}
+
+type State int
+
+const (
+	StateSolving State = iota
+	StateFailed
+	StateCompleted
+)
+
+func (state State) String() string {
+	switch state {
+	case StateSolving:   return "StateSolving"
+	case StateFailed:    return "StateFailed"
+	case StateCompleted: return "StateCompleted"
+	default:			 return ""
 	}
 }
 
 type Game struct {
 	mode Mode
+	state State
 	board Board
-	tiles []*Tile
 	grid HexGrid
+	movesLeft int
 	hoveredTile *Tile  // hovered tile used to highlight tile under cursor
 	selectedTile *Tile // selected tile refers to the first tile being moved
 	movingOrigin rl.Vector2
 }
 
 func createGame() Game {
-	board := Board{}
+	grid := createGrid(screenWidth*0.25, screenHeight*0.25, 4, 5)
+	grid.position = rl.Vector2{
+		halfWidth  - grid.area.Width /2,
+		halfHeight - grid.area.Height/2,
+	}
 
-	tilesA := createTile(&board, halfWidth*1.5, halfHeight*1.5, rl.Red, Pawn)
+	return Game{ grid: grid }
+}
+
+func createLevel1() Game {
+	game := createGame()
+	game.movesLeft = 1
+
+	tilesA := createTile(&game.board, halfWidth*0.40, halfHeight, rl.Red, Pawn)
 	for i := 0; i < 3; i++ {
 		tilesA.createNeighbor(Direction(i), Empty)
 	}
 
-	tilesB := createTile(&board, halfWidth*0.5, halfHeight*0.5, rl.Blue, Pawn)
+	tilesB := createTile(&game.board, halfWidth*1.60, halfHeight*0.40, rl.Blue, Pawn)
 	for i := 0; i < 3; i++ {
 		tilesB.createNeighbor(Direction(i*2), Empty)
 	}
 
-	grid := createGrid(screenWidth*0.25, screenHeight*0.25, 5, 5)
-	grid.position = rl.Vector2{
-		halfWidth - grid.area.Width/2,
-		halfHeight - grid.area.Height/2,
-	}
+	return game
+}
 
-	return Game{
-		mode: ModeBuild,
-		grid: grid,
-		board: board,
+func (game Game) pieceCount() int {
+	pieceCount := 0
+	for _, tile := range game.board.tiles {
+		if tile.piece != Empty {
+			pieceCount += 1
+		}
 	}
+	return pieceCount
+}
+
+func (game Game) isLevelFailed() bool {
+	pieceCount := game.pieceCount()
+	return game.movesLeft == 0 && pieceCount != 1
+}
+
+func (game Game) isLevelCompleted() bool {
+	pieceCount := game.pieceCount()
+	return game.movesLeft >= 0 && pieceCount == 1
 }
 
 func moveTilePiece(tile *Tile, newTile *Tile) bool {
@@ -513,22 +559,40 @@ func selectTile(tiles []*Tile, mousePosition rl.Vector2) *Tile {
 
 func closestSnapPoint(tile *Tile, grid HexGrid) rl.Vector2 {
 	pointFound := false
+
 	closestPoint := rl.Vector2Zero()
 	closestDistance := float32(math.MaxFloat32)
+
 	for _, point := range grid.points {
 		tilePosition := tile.offsetedPosition()
 		pointPosition := grid.pointPosition(point)
+
 		distance := rl.Vector2Distance(tilePosition, pointPosition)
 		if distance < closestDistance {
 			closestPoint = pointPosition
 			closestDistance = distance
 		}
 	}
+
 	assert(!pointFound, "Point not found")
 	return closestPoint
 }
 
 func (game *Game) Update(_delta float32) {
+	if game.state == StateFailed {
+		if rl.IsKeyPressed(rl.KeySpace) {
+			gameScreen = createLevel1()
+		}
+		return
+	}
+
+	if game.state == StateCompleted {
+		if rl.IsKeyPressed(rl.KeySpace) {
+			currentScreen = ScreenIndexMenu
+		}
+		return
+	}
+
 	mousePosition := rl.GetMousePosition()
 	game.hoveredTile = selectTile(game.board.tiles, mousePosition)
 
@@ -571,6 +635,12 @@ func (game *Game) Update(_delta float32) {
 					if moveTilePiece(game.selectedTile, game.hoveredTile) {
 						game.selectedTile = game.hoveredTile
 						game.hoveredTile = nil
+						game.movesLeft -= 1
+						if game.isLevelFailed() {
+							game.state = StateFailed
+						} else if game.isLevelCompleted() {
+							game.state = StateCompleted
+						}
 					}
 				}
 			}
@@ -601,43 +671,96 @@ func (game *Game) Update(_delta float32) {
 	}
 }
 
+func (game Game) renderLevelFailed() {
+	screenArea := rl.Rectangle{0, 0, screenWidth, screenHeight}
+	overlayColor := rl.ColorAlpha(rl.Black, 0.8)
+	rl.DrawRectangleRec(screenArea, overlayColor)
+
+	text := "you failed!"
+	size := rl.MeasureTextEx(gameFont, text, 80.0, 4.0)
+	DrawText(text, halfWidth - size.X/2, halfHeight - size.Y/2, 80, foreground)
+
+	text = "space to retry"
+	size = rl.MeasureTextEx(gameFont, text, 40.0, 4.0)
+	DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*2, 40, foreground)
+}
+
+func (game Game) renderLevelCompleted() {
+	screenArea := rl.Rectangle{0, 0, screenWidth, screenHeight}
+	overlayColor := rl.ColorAlpha(rl.Black, 0.8)
+	rl.DrawRectangleRec(screenArea, overlayColor)
+
+	text := "you completed!"
+	size := rl.MeasureTextEx(gameFont, text, 80.0, 4.0)
+	DrawText(text, halfWidth - size.X/2, halfHeight - size.Y/2, 80, foreground)
+
+	text = "space to continue"
+	size = rl.MeasureTextEx(gameFont, text, 40.0, 4.0)
+	DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*2, 40, foreground)
+}
+
 func (game Game) Render() {
 	rl.BeginTextureMode(target)
 	defer rl.EndTextureMode()
 	rl.ClearBackground(background)
 
-	LiveInfoFrameReset()
+	if debug {
+		LiveInfoFrameReset()
 
-	infoFps := fmt.Sprint("fps: ", rl.GetFPS())
-	LiveInfo(infoFps)
+		infoFps := fmt.Sprint("fps: ", rl.GetFPS())
+		LiveInfo(infoFps)
 
-	infoTiles := fmt.Sprint("tiles: ", len(game.board.tiles))
-	LiveInfo(infoTiles)
+		infoTiles := fmt.Sprint("tiles: ", len(game.board.tiles))
+		LiveInfo(infoTiles)
 
-	infoArea := fmt.Sprint("area: ", game.grid.area)
-	LiveInfo(infoArea)
+		infoArea := fmt.Sprint("area: ", game.grid.area)
+		LiveInfo(infoArea)
 
-	infoMode := fmt.Sprint("mode: ", game.mode)
-	LiveInfo(infoMode)
+		infoMode := fmt.Sprint("mode: ", game.mode)
+		LiveInfo(infoMode)
 
-	infoHovered := fmt.Sprint("hovered: ", game.hoveredTile)
-	LiveInfo(infoHovered)
+		infoHovered := fmt.Sprint("hovered: ", game.hoveredTile)
+		LiveInfo(infoHovered)
 
-	infoSelected := fmt.Sprint("selected: ", game.selectedTile)
-	LiveInfo(infoSelected)
+		infoSelected := fmt.Sprint("selected: ", game.selectedTile)
+		LiveInfo(infoSelected)
 
-	infoSnap := "snap: No tile selected"
-	LiveInfo(infoSnap)
+		infoSnap := "snap: No tile selected"
+		LiveInfo(infoSnap)
 
-	area := game.grid.area
-	area.X += game.grid.position.X
-	area.Y += game.grid.position.Y
-	rl.DrawRectangleLinesEx(area, 2.0, rl.Red)
+		area := game.grid.area
+		area.X += game.grid.position.X
+		area.Y += game.grid.position.Y
+		rl.DrawRectangleLinesEx(area, 2.0, rl.Red)
+	}
 
 	game.grid.Render()
 	for _, tile := range game.board.tiles {
 		tile.Render(game)
 	}
+
+	switchMode := ""
+	switch game.mode {
+	case ModeBuild: switchMode = "space to solve"
+	case ModeSolve: switchMode = "space to build"
+	}
+
+	size := rl.MeasureTextEx(gameFont, switchMode, 40.0, 4.0)
+	DrawText(switchMode, halfWidth - size.X/2, halfHeight*1.60, 40, rl.White)
+
+	movesLeft := fmt.Sprint("moves left: ", game.movesLeft)
+	DrawText(movesLeft, 20.0, 20.0, 40, rl.White)
+
+	if game.state == StateFailed {
+		game.renderLevelFailed()
+		return
+	}
+
+	if game.state == StateCompleted {
+		game.renderLevelCompleted()
+		return
+	}
+
 }
 
 func renderTargetTexture() {
@@ -685,7 +808,7 @@ func RunGame() {
 	rl.InitWindow(screenWidth, screenHeight, "Game")
 	defer rl.CloseWindow()
 
-	gameFont = rl.LoadFontEx("./assets/arvo/Arvo-Bold.ttf", 64, nil, 250)
+	gameFont = rl.LoadFontEx("./assets/arvo/Arvo-Bold.ttf", 96, nil, 250)
 	defer rl.UnloadFont(gameFont)
 
 	SetUIFont(&gameFont)
