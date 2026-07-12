@@ -265,7 +265,7 @@ func (tile *Tile) Render(game *Game) {
 		tiles := possibleMoves(tile)
 		for _, it := range tiles {
 			assert(it != tile, "Cannot highlight same tile")
-			rl.DrawCircleV(it.position, 4.0, rl.Green)
+			game.possibleMovesPoints = append(game.possibleMovesPoints, it.position)
 		}
 	}
 }
@@ -342,14 +342,20 @@ func (s Menu) Render() {
 	author := "Johnathan"
 	size := measureText(author, FontSizeS)
 	x := screenWidth  - size.X     - 20.0
-	y := screenHeight - size.Y*2.0 - 20.0
+	y := screenHeight - size.Y*3.0 - 20.0
 	DrawText(author, x, y, FontSizeS, rl.White)
 
 	version := "raylib 6.x gamejam"
 	size = measureText(version, FontSizeS)
 	x = screenWidth  - size.X     - 20.0
-	y = screenHeight - size.Y*1.0 - 20.0
+	y = screenHeight - size.Y*2.0 - 20.0
 	DrawText(version, x, y, FontSizeS, rl.White)
+
+	pawnMention := "pawn by Master484"
+	size = measureText(pawnMention, FontSizeS)
+	x = screenWidth  - size.X     - 20.0
+	y = screenHeight - size.Y*1.0 - 20.0
+	DrawText(pawnMention, x, y, FontSizeS, rl.White)
 
 	s.playButton.Render()
 	s.quitButton.Render()
@@ -641,9 +647,13 @@ type Game struct {
 	board Board
 	grid HexGrid
 	movesLeft int
-	hoveredTile *Tile  // hovered tile used to highlight tile under cursor
-	selectedTile *Tile // selected tile refers to the first tile being moved
+	// hovered tile used to highlight tile under cursor
+	hoveredTile *Tile
+	// selected tile refers to the first tile being moved
+	selectedTile *Tile
 	movingOrigin rl.Vector2
+	// store possible move points to be draw after everything else
+	possibleMovesPoints []rl.Vector2
 }
 
 func createGame() Game {
@@ -957,9 +967,15 @@ func (game Game) Render() {
 		rl.DrawRectangleLinesEx(area, 2.0, rl.Red)
 	}
 
+	game.possibleMovesPoints = nil
+
 	game.grid.Render()
 	for _, tile := range game.board.tiles {
 		tile.Render(&game)
+	}
+
+	for _, point := range game.possibleMovesPoints {
+		rl.DrawCircleV(point, 4.0, rl.Green)
 	}
 
 	size := rl.Vector2{}
