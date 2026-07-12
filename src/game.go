@@ -204,12 +204,12 @@ func (tile *Tile) Render(game Game) {
 		rl.DrawRectangleLinesEx(rl.Rectangle{x - 10, y - 10, 20, 20}, 2.0, rl.White)
 	}
 
-	drawPossibleMoves := (
+	renderPossibleMoves := (
 		tile.piece != Empty &&
-		(tile == game.selectedTile || tile == game.hoveredTile) &&
+		(tile == game.selectedTile || (game.selectedTile == nil && tile == game.hoveredTile)) &&
 		game.mode == ModeSolve)
 
-	if drawPossibleMoves {
+	if renderPossibleMoves {
 		tiles := possibleMoves(tile)
 		for _, it := range tiles {
 			assert(it != tile, "Cannot highlight same tile")
