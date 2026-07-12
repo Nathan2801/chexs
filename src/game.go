@@ -280,12 +280,14 @@ func (tile *Tile) applyMove() {
 	tile.iterateConnectedTiles(func (it *Tile) {
 		it.position.X += it.moveOffset.X
 		it.position.Y += it.moveOffset.Y
-		it.cancelMove()
+		it.moveOffset = rl.Vector2Zero()
 	}, true)
 }
 
 func (tile *Tile) cancelMove() {
-	tile.moveOffset = rl.Vector2Zero()
+	tile.iterateConnectedTiles(func (it *Tile) {
+		it.moveOffset = rl.Vector2Zero()
+	}, true)
 }
 
 func (tile *Tile) createNeighbor(direction Direction, piece Piece) *Tile {
@@ -690,6 +692,34 @@ func (game Game) isLevelCompleted() bool {
 	return game.movesLeft >= 0 && pieceCount == 1
 }
 
+func (game Game) isAnyTileColliding(tile *Tile) bool {
+	tiles := map[*Tile]bool{}
+
+	tile.iterateConnectedTiles(func (it *Tile) {
+		tiles[it] = true
+	}, true)
+
+	collided := false
+	tile.iterateConnectedTiles(func (it *Tile) {
+		if collided {
+			return
+		}
+		for _, itBoard := range game.board.tiles {
+			_, ok := tiles[itBoard]
+			if ok {
+				continue
+			}
+			position := it.offsetedPosition()
+			distance := rl.Vector2Distance(itBoard.position, position)
+			if distance <= tileDefaultDistance*1.1 {
+				collided = true
+			}
+		}
+	}, true)
+
+	return collided
+}
+
 func moveTilePiece(tile *Tile, newTile *Tile) bool {
 	assert(tile != nil, "Tile is nil")
 	assert(newTile != nil, "End tile is nil")
@@ -803,10 +833,15 @@ func (game *Game) Update(_delta float32) {
 				tile := game.selectedTile
 
 				closestSnap := closestSnapPoint(tile, game.grid)
-				snapOffset := rl.Vector2Subtract( closestSnap, tile.position)
+				snapOffset := rl.Vector2Subtract(closestSnap, tile.position)
 
-				game.selectedTile.move(snapOffset.X, snapOffset.Y)
-				game.selectedTile.applyMove()
+				tile.move(snapOffset.X, snapOffset.Y)
+				isTileCollinding := game.isAnyTileColliding(tile)
+				if isTileCollinding {
+					tile.cancelMove()
+				} else {
+					tile.applyMove()
+				}
 			}
 			game.movingOrigin = rl.Vector2Zero()
 			game.selectedTile = nil
