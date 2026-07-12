@@ -17,7 +17,13 @@ const (
 )
 
 const gameName = "CHEXS"
+
+// @note: not sure about this note
+// @note: refers to the distance between tile center and borders, multiplies to
+// two to get the distance adjacent tile point distance
 const tileDefaultDistance float32 = 40.0
+// @hack: I do not trust this to handle different environments
+const tileDiagonalDistance float32 = tileDefaultDistance*2.0*1.72
 
 const screenWidth = 720
 const screenHeight = 720
@@ -195,7 +201,7 @@ func (tile *Tile) Render(game Game) {
 
 	switch tile.piece {
 	case Pawn:
-		rl.DrawRectangleRec(rl.Rectangle{x - 10, y - 10, 20, 20}, rl.White)
+		rl.DrawRectangleLinesEx(rl.Rectangle{x - 10, y - 10, 20, 20}, 2.0, rl.White)
 	}
 
 	drawPossibleMoves := (
@@ -385,8 +391,20 @@ type Board struct {
 func (board *Board) isTileNeighbor(tileA, tileB *Tile) bool {
 	tileAPosition := tileA.offsetedPosition()
 	tileBPosition := tileB.offsetedPosition()
+
 	distance := rl.Vector2Distance(tileAPosition, tileBPosition)
 	return distance <= tileDefaultDistance*2.1 // @hack: 2.1 for error correction
+}
+
+func (board *Board) isTileDiagonal(tileA, tileB *Tile) bool {
+	tileAPosition := tileA.offsetedPosition()
+	tileBPosition := tileB.offsetedPosition()
+
+	distanceMin := tileDiagonalDistance*0.9
+	distanceMax := tileDiagonalDistance*1.1
+
+	distance := rl.Vector2Distance(tileAPosition, tileBPosition)
+	return distance >= distanceMin && distance <= distanceMax
 }
 
 type Mode int
@@ -467,6 +485,9 @@ func possibleMoves(tile *Tile) []*Tile {
 				continue
 			}
 			if board.isTileNeighbor(tile, it) {
+				tiles = append(tiles, it)
+			}
+			if board.isTileDiagonal(tile, it) {
 				tiles = append(tiles, it)
 			}
 		}
