@@ -537,14 +537,16 @@ func (game *Game) Update(_delta float32) {
 			game.selectedTile = nil
 		case ModeSolve:
 			if game.selectedTile == nil {
-				game.selectedTile = game.hoveredTile
+				if game.hoveredTile != nil && game.hoveredTile.piece != Empty {
+					game.selectedTile = game.hoveredTile
+				}
 			} else if game.hoveredTile == nil {
 				game.selectedTile = nil
 			} else {
 				if game.selectedTile != game.hoveredTile {
 					if moveTilePiece(game.selectedTile, game.hoveredTile) {
+						game.selectedTile = game.hoveredTile
 						game.hoveredTile = nil
-						game.selectedTile = nil
 					}
 				}
 			}
