@@ -52,10 +52,10 @@ func (b Button) Render() {
 		}
 	}
 
-	rl.DrawRectangleRec(b.Rect, b.RectColor)
+	rl.DrawRectangleRounded(b.Rect, 0.3, 0.0, b.RectColor)
 	rl.DrawTextEx(
 		*uiFont, b.Text,
-		rl.Vector2{float32(textX), float32(textY)},
+		rl.Vector2{textX, textY},
 		float32(textSize), 4.0, color)
 }
 
@@ -70,9 +70,6 @@ func LiveInfo(text string) {
 	liveInfoY += 24
 }
 
-func DrawText(text string, x float32, y float32, size int, color rl.Color) {
-	rl.DrawTextEx(
-		*uiFont, text,
-		rl.Vector2{x, y},
-		float32(size), 4.0, color)
+func DrawText(text string, x, y, size float32, color rl.Color) {
+	rl.DrawTextEx(*uiFont, text, rl.Vector2{x, y}, size, 4.0, color)
 }

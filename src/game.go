@@ -19,6 +19,12 @@ const (
 	ScreenGame
 )
 
+const (
+	FontSizeS float32 = 24.0
+	FontSizeM = 32.0
+	FontSizeB = 40.0
+)
+
 const gameName = "CHEXS"
 
 // @note: not sure about this note
@@ -330,7 +336,7 @@ func (s Menu) Render() {
 	titleX := halfWidth - titleSize.X/2
 	titleY := halfHeight - titleSize.Y/2 - 64
 
-	DrawText(gameName, titleX, titleY, int(titleFontSize), rl.White)
+	DrawText(gameName, titleX, titleY, titleFontSize, rl.White)
 
 	s.playButton.Render()
 	s.quitButton.Render()
@@ -340,6 +346,7 @@ type TutorialPart int
 
 const (
 	TutorialIslands TutorialPart = iota
+	TutorialSolving
 	TutorialPawnMove
 	TutorialPawnCapture
 )
@@ -365,6 +372,8 @@ func (tutorial *Tutorial) Update(delta float32) {
 	if rl.IsKeyPressed(rl.KeySpace) {
 		switch tutorial.part {
 		case TutorialIslands:
+			tutorial.part = TutorialSolving
+		case TutorialSolving:
 			tutorial.part = TutorialPawnMove
 		case TutorialPawnMove:
 			tutorial.part = TutorialPawnCapture
@@ -377,7 +386,7 @@ func (tutorial *Tutorial) Update(delta float32) {
 
 func renderPressSpace(blink bool) {
 	text := "press space"
-	size := measureText(text, 24.0)
+	size := measureText(text, FontSizeS)
 
 	color := rl.White
 	if blink {
@@ -387,7 +396,7 @@ func renderPressSpace(blink bool) {
 	x := screenWidth  - size.X - 20.0
 	y := screenHeight - size.Y - 20.0
 
-	DrawText(text, x, y, 24, color)
+	DrawText(text, x, y, FontSizeS, color)
 }
 
 func (tutorial Tutorial) Render() {
@@ -397,29 +406,42 @@ func (tutorial Tutorial) Render() {
 
 	text := ""
 	size := rl.Vector2{}
-	fontSize := float32(32.0)
 
 	switch tutorial.part {
 	case TutorialIslands:
 		renderPressSpace(tutorial.blink)
 
 		text = "move the tiles"
-		size = measureText(text, fontSize)
-		DrawText(text, halfWidth - size.X/2, halfHeight - size.Y*1.8, int(fontSize), rl.White)
+		size = measureText(text, FontSizeM)
+		DrawText(text, halfWidth - size.X/2, halfHeight - size.Y*1.8, FontSizeM, rl.White)
 
 		text = "build the puzzle"
-		size = measureText(text, fontSize)
-		DrawText(text, halfWidth - size.X/2, halfHeight - size.Y*0.5, int(fontSize), rl.White)
+		size = measureText(text, FontSizeM)
+		DrawText(text, halfWidth - size.X/2, halfHeight - size.Y*0.5, FontSizeM, rl.White)
 
 		text = "and then solve it"
-		size = measureText(text, fontSize)
-		DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*0.8, int(fontSize), rl.White)
+		size = measureText(text, FontSizeM)
+		DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*0.8, FontSizeM, rl.White)
+	case TutorialSolving:
+		renderPressSpace(tutorial.blink)
+
+		text = "to solve it you"
+		size = measureText(text, FontSizeM)
+		DrawText(text, halfWidth - size.X/2, halfHeight - size.Y*1.8, FontSizeM, rl.White)
+
+		text = "have to capture until"
+		size = measureText(text, FontSizeM)
+		DrawText(text, halfWidth - size.X/2, halfHeight - size.Y*0.5, FontSizeM, rl.White)
+
+		text = "a single piece remains"
+		size = measureText(text, FontSizeM)
+		DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*0.8, FontSizeM, rl.White)
 	case TutorialPawnMove:
 		renderPressSpace(tutorial.blink)
 
 		text = "pawn moves in faces"
-		size = measureText(text, fontSize)
-		DrawText(text, halfWidth - size.X/2, screenHeight*0.25, int(fontSize), rl.White)
+		size = measureText(text, FontSizeM)
+		DrawText(text, halfWidth - size.X/2, screenHeight*0.25, FontSizeM, rl.White)
 
 		tile := createTile(nil, halfWidth, halfHeight*1.1, rl.White, Pawn)
 		for i := 0; i < 6; i++ {
@@ -436,8 +458,8 @@ func (tutorial Tutorial) Render() {
 		renderPressSpace(tutorial.blink)
 
 		text = "pawn captures in diagonals"
-		size = measureText(text, fontSize)
-		DrawText(text, halfWidth - size.X/2, screenHeight*0.25, int(fontSize), rl.White)
+		size = measureText(text, FontSizeM)
+		DrawText(text, halfWidth - size.X/2, screenHeight*0.25, FontSizeM, rl.White)
 
 		tile := createTile(nil, halfWidth - tileDefaultDistance, halfHeight*1.25, rl.White, Pawn)
 		tile.createNeighbor(Up, Empty)
@@ -904,7 +926,7 @@ func (game Game) Render() {
 	DrawText(switchMode, halfWidth - size.X/2, halfHeight*1.60, 40, rl.White)
 
 	movesLeft := fmt.Sprint("moves left: ", game.movesLeft)
-	DrawText(movesLeft, 20.0, 20.0, 40, rl.White)
+	DrawText(movesLeft, 20.0, 20.0, 32, rl.White)
 
 	if game.state == StateFailed {
 		game.renderLevelFailed()
