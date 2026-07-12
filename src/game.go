@@ -4,16 +4,19 @@ import "fmt"
 import "math"
 import rl "github.com/gen2brain/raylib-go/raylib"
 
-type Screen interface {
+// @fixme: scene is not being used because update requires the receiver to be
+// pointer which gives a error when trying to use this interface
+type Scene interface {
 	Update(delta float32)
 	Render()
 }
 
-type ScreenIndex int
+type Screen int
 
 const (
-	ScreenIndexMenu ScreenIndex = iota
-	ScreenIndexGame
+	ScreenMenu Screen = iota
+	ScreenTutorial
+	ScreenGame
 )
 
 const gameName = "CHEXS"
@@ -42,10 +45,11 @@ var cursor = rl.MouseCursorDefault
 var foreground = rl.GetColor(0xCCCCCCFF)
 var background = rl.GetColor(0x282828FF)
 
-var menuScreen = createMenu()
 var gameScreen Game
+var menuScreen = createMenu()
+var tutorialScreen = createTutorial()
 
-var currentScreen = ScreenIndexMenu
+var currentScreen = ScreenMenu
 
 func assert(condition bool, message string) {
 	if !condition {
@@ -54,12 +58,21 @@ func assert(condition bool, message string) {
 }
 
 func play() {
-	gameScreen = createLevel1()
-	currentScreen = ScreenIndexGame
+	goToTutorial := true
+	if goToTutorial {
+		currentScreen = ScreenTutorial
+	} else {
+		startGame()
+	}
 }
 
 func quit() {
 	shouldQuit = true
+}
+
+func startGame() {
+	gameScreen = createLevel1()
+	currentScreen = ScreenGame
 }
 
 type Direction int
@@ -81,7 +94,7 @@ func (direction Direction) String() string {
 	case Up:        return "Up"
 	case UpRight:   return "UpRight"
 	case DownRight: return "DownRight"
-	default: return ""
+	default:        return ""
 	}
 }
 
@@ -104,6 +117,10 @@ func hexFaceAngle(d Direction) float64 {
 	return math.Pi*2.0/6.0*float64(d) + math.Pi*0.5
 }
 
+func measureText(text string, textSize float32) rl.Vector2 {
+	return rl.MeasureTextEx(gameFont, text, textSize, 4.0)
+}
+
 type Tile struct {
 	piece Piece
 	board *Board
@@ -116,12 +133,16 @@ type Tile struct {
 }
 
 func createTile(board *Board, x, y float32, color rl.Color, piece Piece) *Tile {
-	board.tiles = append(board.tiles, &Tile{
+	tile := &Tile{
 		piece: piece,
 		board: board,
 		color: color,
 		position: rl.Vector2{x, y},
-	})
+	}
+	if board == nil {
+		return tile
+	}
+	board.tiles = append(board.tiles, tile)
 	return board.tiles[len(board.tiles) - 1]
 }
 
@@ -155,9 +176,8 @@ func (tile Tile) isMoving() bool {
 	return tile.moveOffset != rl.Vector2Zero()
 }
 
-func (tile *Tile) Render(game Game) {
+func (tile Tile) vertices() []rl.Vector2 {
 	verts := []rl.Vector2{}
-	faces := []rl.Vector2{}
 
 	distance := tileDefaultDistance
 	position := tile.offsetedPosition()
@@ -170,14 +190,47 @@ func (tile *Tile) Render(game Game) {
 		offsetX := float32(math.Cos(angle))*distance
 		offsetY := float32(math.Sin(angle))*distance
 		verts = append(verts, rl.Vector2{x + offsetX, y + offsetY})
+	}
+	return verts
+}
 
-		tAngle := hexFaceAngle(Direction(i))
-		tX := float32(math.Cos(tAngle))*distance*2.0
-		tY := float32(math.Sin(tAngle))*distance*2.0
-		faces = append(faces, rl.Vector2{x + tX, y + tY})
+func (tile Tile) onlyRender(highlight bool) {
+	color := tile.color
+	if highlight {
+		color = rl.ColorBrightness(color, 0.2)
 	}
 
+	vertices := tile.vertices()
+	for i := 0; i < len(vertices); i++ {
+		pointA := vertices[i]
+
+		pointBIndex := i + 1
+		if pointBIndex >= len(vertices) {
+			pointBIndex = 0
+		}
+
+		pointB := vertices[pointBIndex]
+		rl.DrawLineEx(pointA, pointB, 2.0, color)
+	}
+}
+
+func (tile Tile) onlyRenderPiece() {
+	position := tile.offsetedPosition()
+
+	x := position.X
+	y := position.Y
+
+	switch tile.piece {
+	case Pawn: {
+		rl.DrawRectangleLinesEx(rl.Rectangle{x - 10, y - 10, 20, 20}, 2.0, rl.White)
+	}}
+}
+
+func (tile *Tile) Render(game *Game) {
+	position := tile.offsetedPosition()
 	highlight := tile == game.hoveredTile
+
+	tile.onlyRender(highlight)
 
 	// @note: debug center of tiles
 	if debug {
@@ -193,22 +246,7 @@ func (tile *Tile) Render(game Game) {
 		color = rl.ColorBrightness(color, 0.2)
 	}
 
-	for i := 0; i < len(verts); i++ {
-		pointA := verts[i]
-
-		pointBIndex := i + 1
-		if pointBIndex >= len(verts) {
-			pointBIndex = 0
-		}
-
-		pointB := verts[pointBIndex]
-		rl.DrawLineEx(pointA, pointB, 2.0, color)
-	}
-
-	switch tile.piece {
-	case Pawn:
-		rl.DrawRectangleLinesEx(rl.Rectangle{x - 10, y - 10, 20, 20}, 2.0, rl.White)
-	}
+	tile.onlyRenderPiece()
 
 	renderPossibleMoves := (
 		tile.piece != Empty &&
@@ -243,7 +281,7 @@ func (tile *Tile) cancelMove() {
 	tile.moveOffset = rl.Vector2Zero()
 }
 
-func (tile *Tile) createNeighbor(direction Direction, piece Piece) {
+func (tile *Tile) createNeighbor(direction Direction, piece Piece) *Tile {
 	angle := hexFaceAngle(direction)
 
 	neighborX := tile.position.X + float32(math.Cos(angle))*tileDefaultDistance*2.0
@@ -254,6 +292,8 @@ func (tile *Tile) createNeighbor(direction Direction, piece Piece) {
 
 	opposite := direction.opposite()
 	neighbor.neighbors[int(opposite)] = tile
+
+	return neighbor
 }
 
 type Menu struct {
@@ -284,7 +324,6 @@ func (s Menu) Render() {
 
 	rl.ClearBackground(background)
 
-	// Draw title
 	titleFontSize := float32(64.0)
 	titleSize := rl.MeasureTextEx(gameFont, gameName, titleFontSize, 4)
 
@@ -293,9 +332,125 @@ func (s Menu) Render() {
 
 	DrawText(gameName, titleX, titleY, int(titleFontSize), rl.White)
 
-	// Draw buttons
 	s.playButton.Render()
 	s.quitButton.Render()
+}
+
+type TutorialPart int
+
+const (
+	TutorialIslands TutorialPart = iota
+	TutorialPawnMove
+	TutorialPawnCapture
+)
+
+type Tutorial struct {
+	part TutorialPart
+
+	blink bool
+	blinkTime float32
+}
+
+func createTutorial() Tutorial {
+	return Tutorial{}
+}
+
+func (tutorial *Tutorial) Update(delta float32) {
+	tutorial.blinkTime += delta
+	if tutorial.blinkTime >= 0.5 {
+		tutorial.blink = !tutorial.blink
+		tutorial.blinkTime = 0.0
+	}
+
+	if rl.IsKeyPressed(rl.KeySpace) {
+		switch tutorial.part {
+		case TutorialIslands:
+			tutorial.part = TutorialPawnMove
+		case TutorialPawnMove:
+			tutorial.part = TutorialPawnCapture
+		case TutorialPawnCapture:
+			tutorial.part = TutorialIslands
+			startGame()
+		}
+	}
+}
+
+func renderPressSpace(blink bool) {
+	text := "press space"
+	size := measureText(text, 24.0)
+
+	color := rl.White
+	if blink {
+		color = rl.Gray
+	}
+
+	x := screenWidth  - size.X - 20.0
+	y := screenHeight - size.Y - 20.0
+
+	DrawText(text, x, y, 24, color)
+}
+
+func (tutorial Tutorial) Render() {
+	rl.BeginTextureMode(target)
+	defer rl.EndTextureMode()
+	rl.ClearBackground(background)
+
+	text := ""
+	size := rl.Vector2{}
+	fontSize := float32(32.0)
+
+	switch tutorial.part {
+	case TutorialIslands:
+		renderPressSpace(tutorial.blink)
+
+		text = "move the tiles"
+		size = measureText(text, fontSize)
+		DrawText(text, halfWidth - size.X/2, halfHeight - size.Y*1.8, int(fontSize), rl.White)
+
+		text = "build the puzzle"
+		size = measureText(text, fontSize)
+		DrawText(text, halfWidth - size.X/2, halfHeight - size.Y*0.5, int(fontSize), rl.White)
+
+		text = "and then solve it"
+		size = measureText(text, fontSize)
+		DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*0.8, int(fontSize), rl.White)
+	case TutorialPawnMove:
+		renderPressSpace(tutorial.blink)
+
+		text = "pawn moves in faces"
+		size = measureText(text, fontSize)
+		DrawText(text, halfWidth - size.X/2, screenHeight*0.25, int(fontSize), rl.White)
+
+		tile := createTile(nil, halfWidth, halfHeight*1.1, rl.White, Pawn)
+		for i := 0; i < 6; i++ {
+			direction := Direction(i)
+			neighbor := tile.createNeighbor(direction, Empty)
+			neighbor.color = rl.Green
+		}
+
+		tile.iterateConnectedTiles(func (tile *Tile) {
+			tile.onlyRender(false)
+			tile.onlyRenderPiece()
+		}, true)
+	case TutorialPawnCapture:
+		renderPressSpace(tutorial.blink)
+
+		text = "pawn captures in diagonals"
+		size = measureText(text, fontSize)
+		DrawText(text, halfWidth - size.X/2, screenHeight*0.25, int(fontSize), rl.White)
+
+		tile := createTile(nil, halfWidth - tileDefaultDistance, halfHeight*1.25, rl.White, Pawn)
+		tile.createNeighbor(Up, Empty)
+
+		neighbor := tile.createNeighbor(UpRight, Empty)
+		neighbor = neighbor.createNeighbor(Up, Empty)
+		neighbor.color = rl.Green
+
+		tile.iterateConnectedTiles(func (tile *Tile) {
+			tile.onlyRender(false)
+			tile.onlyRenderPiece()
+		}, true)
+	}
 }
 
 // @todo: fix naming convention, here we specify HexGrid but tile we call it
@@ -588,7 +743,7 @@ func (game *Game) Update(_delta float32) {
 
 	if game.state == StateCompleted {
 		if rl.IsKeyPressed(rl.KeySpace) {
-			currentScreen = ScreenIndexMenu
+			currentScreen = ScreenMenu
 		}
 		return
 	}
@@ -736,7 +891,7 @@ func (game Game) Render() {
 
 	game.grid.Render()
 	for _, tile := range game.board.tiles {
-		tile.Render(game)
+		tile.Render(&game)
 	}
 
 	switchMode := ""
@@ -785,12 +940,15 @@ func renderTargetTexture() {
 
 func updateCurrentScreen(delta float32) {
 	switch currentScreen {
-	case ScreenIndexMenu:
+	case ScreenMenu:
 		menuScreen.Update(delta)
 		menuScreen.Render()
-	case ScreenIndexGame:
+	case ScreenGame:
 		gameScreen.Update(delta)
 		gameScreen.Render()
+	case ScreenTutorial:
+		tutorialScreen.Update(delta)
+		tutorialScreen.Render()
 	default:
 		assert(false, "Unreachable")
 	}
