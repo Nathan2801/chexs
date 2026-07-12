@@ -202,10 +202,13 @@ func (tile Tile) vertices() []rl.Vector2 {
 	return verts
 }
 
-func (tile Tile) onlyRender(highlight bool) {
+func (tile Tile) onlyRender(highlight bool, selected bool) {
 	color := tile.color
 	if highlight {
 		color = rl.ColorBrightness(color, 0.2)
+	}
+	if selected {
+		color = rl.Gold
 	}
 
 	vertices := tile.vertices()
@@ -236,9 +239,11 @@ func (tile Tile) onlyRenderPiece() {
 
 func (tile *Tile) Render(game *Game) {
 	position := tile.offsetedPosition()
+
+	selected := tile == game.selectedTile
 	highlight := tile == game.hoveredTile
 
-	tile.onlyRender(highlight)
+	tile.onlyRender(highlight, selected)
 
 	// @note: debug center of tiles
 	if debug {
@@ -247,11 +252,6 @@ func (tile *Tile) Render(game *Game) {
 			centerColor = rl.Red
 		}
 		rl.DrawCircleV(position, 2.0, centerColor)
-	}
-
-	color := tile.color
-	if highlight {
-		color = rl.ColorBrightness(color, 0.2)
 	}
 
 	tile.onlyRenderPiece()
@@ -388,7 +388,7 @@ func (tutorial *Tutorial) Update(delta float32) {
 		tutorial.blinkTime = 0.0
 	}
 
-	if rl.IsKeyPressed(rl.KeySpace) {
+	if rl.IsKeyPressed(rl.KeySpace) || rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 		switch tutorial.part {
 		case TutorialIslands:
 			tutorial.part = TutorialSolving
@@ -403,19 +403,25 @@ func (tutorial *Tutorial) Update(delta float32) {
 	}
 }
 
-func renderPressSpace(blink bool) {
-	text := "press space"
+func renderHint(text string, color rl.Color, blink bool) {
 	size := measureText(text, FontSizeS)
 
-	color := rl.White
 	if blink {
-		color = rl.Gray
+		color = rl.ColorBrightness(color, -0.2)
 	}
 
 	x := screenWidth  - size.X - 20.0
 	y := screenHeight - size.Y - 20.0
 
 	DrawText(text, x, y, FontSizeS, color)
+}
+
+func renderPressSpace(blink bool) {
+	renderHint("press space", rl.White, blink)
+}
+
+func renderRestartHint() {
+	renderHint("press R to restart", rl.Gray, false)
 }
 
 func (tutorial Tutorial) Render() {
@@ -462,15 +468,15 @@ func (tutorial Tutorial) Render() {
 		size = measureText(text, FontSizeM)
 		DrawText(text, halfWidth - size.X/2, screenHeight*0.25, FontSizeM, rl.White)
 
-		tile := createTile(nil, halfWidth, halfHeight*1.1, rl.White, Pawn)
+		tile := createTile(nil, halfWidth, halfHeight*1.1, rl.LightGray, Pawn)
 		for i := 0; i < 6; i++ {
 			direction := Direction(i)
 			neighbor := tile.createNeighbor(direction, Empty)
-			neighbor.color = rl.Green
+			neighbor.color = rl.DarkGreen
 		}
 
 		tile.iterateConnectedTiles(func (tile *Tile) {
-			tile.onlyRender(false)
+			tile.onlyRender(false, false)
 			tile.onlyRenderPiece()
 		}, true)
 	case TutorialPawnCapture:
@@ -480,15 +486,15 @@ func (tutorial Tutorial) Render() {
 		size = measureText(text, FontSizeM)
 		DrawText(text, halfWidth - size.X/2, screenHeight*0.25, FontSizeM, rl.White)
 
-		tile := createTile(nil, halfWidth - tileDefaultDistance, halfHeight*1.25, rl.White, Pawn)
+		tile := createTile(nil, halfWidth - tileDefaultDistance, halfHeight*1.25, rl.LightGray, Pawn)
 		tile.createNeighbor(Up, Empty)
 
 		neighbor := tile.createNeighbor(UpRight, Empty)
 		neighbor = neighbor.createNeighbor(Up, Empty)
-		neighbor.color = rl.Green
+		neighbor.color = rl.DarkGreen
 
 		tile.iterateConnectedTiles(func (tile *Tile) {
-			tile.onlyRender(false)
+			tile.onlyRender(false, false)
 			tile.onlyRenderPiece()
 		}, true)
 	}
@@ -643,10 +649,13 @@ func (state State) String() string {
 
 type Game struct {
 	mode Mode
+	level int
 	state State
 	board Board
 	grid HexGrid
 	movesLeft int
+	// if this is true build is disabled
+	alreadyMoved bool
 	// hovered tile used to highlight tile under cursor
 	hoveredTile *Tile
 	// selected tile refers to the first tile being moved
@@ -668,6 +677,8 @@ func createGame() Game {
 
 func createLevel1() Game {
 	game := createGame()
+
+	game.level = 1
 	game.movesLeft = 1
 
 	tilesA := createTile(&game.board, halfWidth*0.40, halfHeight, rl.Red, Pawn)
@@ -678,6 +689,30 @@ func createLevel1() Game {
 	tilesB := createTile(&game.board, halfWidth*1.60, halfHeight*0.40, rl.Blue, Pawn)
 	for i := 0; i < 3; i++ {
 		tilesB.createNeighbor(Direction(i*2), Empty)
+	}
+
+	return game
+}
+
+func createLevel2() Game {
+	game := createGame()
+
+	game.level = 2
+	game.movesLeft = 3
+
+	tilesA := createTile(&game.board, halfWidth*0.40, halfHeight, rl.Red, Pawn)
+	for i := 0; i < 3; i++ {
+		tilesA.createNeighbor(Direction(i), Empty)
+	}
+
+	tilesB := createTile(&game.board, halfWidth*1.60, halfHeight*0.40, rl.Blue, Pawn)
+	for i := 0; i < 3; i++ {
+		piece := Empty
+		if i == 2 {
+			piece = Pawn
+		}
+
+		tilesB.createNeighbor(Direction(i*2), piece)
 	}
 
 	return game
@@ -808,15 +843,23 @@ func closestSnapPoint(tile *Tile, grid HexGrid) rl.Vector2 {
 
 func (game *Game) Update(_delta float32) {
 	if game.state == StateFailed {
-		if rl.IsKeyPressed(rl.KeySpace) {
+		if rl.IsKeyPressed(rl.KeySpace) || rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 			gameScreen = createLevel1()
 		}
 		return
 	}
 
 	if game.state == StateCompleted {
-		if rl.IsKeyPressed(rl.KeySpace) {
-			currentScreen = ScreenMenu
+		if rl.IsKeyPressed(rl.KeySpace) || rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+			if game.level == 1 {
+				gameScreen = createLevel2()
+				currentScreen = ScreenGame
+			} else if game.level == 2 {
+				gameScreen = createLevel1()
+				currentScreen = ScreenMenu
+			} else {
+				assert(false, "Unreachable")
+			}
 		}
 		return
 	}
@@ -866,7 +909,8 @@ func (game *Game) Update(_delta float32) {
 			} else {
 				if game.selectedTile != game.hoveredTile {
 					if moveTilePiece(game.selectedTile, game.hoveredTile) {
-						game.selectedTile = game.hoveredTile
+						game.alreadyMoved = true
+						game.selectedTile = nil
 						game.hoveredTile = nil
 						game.movesLeft -= 1
 						if game.isLevelFailed() {
@@ -885,11 +929,21 @@ func (game *Game) Update(_delta float32) {
 		case ModeBuild:
 			game.mode = ModeSolve
 		case ModeSolve:
-			game.mode = ModeBuild
-			if game.selectedTile != nil {
-				game.selectedTile.cancelMove()
-				game.selectedTile = nil
+			if !game.alreadyMoved {
+				game.mode = ModeBuild
+				if game.selectedTile != nil {
+					game.selectedTile.cancelMove()
+					game.selectedTile = nil
+				}
 			}
+		}
+	}
+
+	if rl.IsKeyPressed(rl.KeyR) {
+		switch game.level {
+		case 1: gameScreen = createLevel1()
+		case 2: gameScreen = createLevel2()
+		default: assert(false, "Unreachable")
 		}
 	}
 
@@ -975,7 +1029,7 @@ func (game Game) Render() {
 	}
 
 	for _, point := range game.possibleMovesPoints {
-		rl.DrawCircleV(point, 4.0, rl.Green)
+		rl.DrawCircleV(point, 4.0, rl.Gold)
 	}
 
 	size := rl.Vector2{}
@@ -992,11 +1046,16 @@ func (game Game) Render() {
 	DrawText(modeText, halfWidth - size.X/2, screenHeight*0.8, FontSizeM, rl.White)
 
 	text := "space to switch"
+	if game.alreadyMoved {
+		text = "move done cannot switch"
+	}
 	size = measureText(text, FontSizeS)
 	DrawText(text, halfWidth - size.X/2, screenHeight*0.8 + FontSizeM*1.1, FontSizeS, rl.White)
 
 	movesLeft := fmt.Sprint("moves left: ", game.movesLeft)
 	DrawText(movesLeft, 20.0, 20.0, FontSizeM, rl.White)
+
+	renderRestartHint()
 
 	if game.state == StateFailed {
 		game.renderLevelFailed()
