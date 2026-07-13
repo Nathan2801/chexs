@@ -1,3 +1,4 @@
 *.exe
+*.zip
 main.wasm
 .nvim.lua

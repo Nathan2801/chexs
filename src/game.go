@@ -960,7 +960,7 @@ func (game *Game) Update(_delta float32) {
 
 func (game Game) renderLevelFailed() {
 	screenArea := rl.Rectangle{0, 0, screenWidth, screenHeight}
-	overlayColor := rl.ColorAlpha(rl.Black, 0.8)
+	overlayColor := rl.ColorAlpha(rl.Black, 0.9)
 	rl.DrawRectangleRec(screenArea, overlayColor)
 
 	text := "you failed!"
@@ -974,7 +974,7 @@ func (game Game) renderLevelFailed() {
 
 func (game Game) renderLevelCompleted() {
 	screenArea := rl.Rectangle{0, 0, screenWidth, screenHeight}
-	overlayColor := rl.ColorAlpha(rl.Black, 0.8)
+	overlayColor := rl.ColorAlpha(rl.Black, 0.9)
 	rl.DrawRectangleRec(screenArea, overlayColor)
 
 	text := "you completed!"
