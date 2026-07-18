@@ -4,20 +4,10 @@ import "fmt"
 import "math"
 import rl "github.com/gen2brain/raylib-go/raylib"
 
-// @fixme: scene is not being used because update requires the receiver to be
-// pointer which gives a error when trying to use this interface
 type Scene interface {
-	Update(delta float32)
-	Render()
+	update(delta float32)
+	render()
 }
-
-type Screen int
-
-const (
-	ScreenMenu Screen = iota
-	ScreenTutorial
-	ScreenGame
-)
 
 const (
 	FontSizeS float32 = 24.0
@@ -57,7 +47,7 @@ var gameScreen Game
 var menuScreen = createMenu()
 var tutorialScreen = createTutorial()
 
-var currentScreen = ScreenMenu
+var currentScene Scene
 
 func assert(condition bool, message string) {
 	if !condition {
@@ -68,7 +58,7 @@ func assert(condition bool, message string) {
 func play() {
 	goToTutorial := true
 	if goToTutorial {
-		currentScreen = ScreenTutorial
+		currentScene = &tutorialScreen
 	} else {
 		startGame()
 	}
@@ -80,7 +70,7 @@ func quit() {
 
 func startGame() {
 	gameScreen = createLevel1()
-	currentScreen = ScreenGame
+	currentScene = &gameScreen
 }
 
 type Direction int
@@ -237,7 +227,7 @@ func (tile Tile) onlyRenderPiece() {
 	}}
 }
 
-func (tile *Tile) Render(game *Game) {
+func (tile *Tile) render(game *Game) {
 	position := tile.offsetedPosition()
 
 	selected := tile == game.selectedTile
@@ -326,9 +316,9 @@ func createMenu() Menu {
 	return Menu{ playButton, quitButton }
 }
 
-func (s Menu) Update(_delta float32) {}
+func (s Menu) update(_delta float32) {}
 
-func (s Menu) Render() {
+func (s Menu) render() {
 	rl.BeginTextureMode(target)
 	defer rl.EndTextureMode()
 
@@ -381,7 +371,7 @@ func createTutorial() Tutorial {
 	return Tutorial{}
 }
 
-func (tutorial *Tutorial) Update(delta float32) {
+func (tutorial *Tutorial) update(delta float32) {
 	tutorial.blinkTime += delta
 	if tutorial.blinkTime >= 0.5 {
 		tutorial.blink = !tutorial.blink
@@ -424,7 +414,7 @@ func renderRestartHint() {
 	renderHint("press R to restart", rl.Gray, false)
 }
 
-func (tutorial Tutorial) Render() {
+func (tutorial Tutorial) render() {
 	rl.BeginTextureMode(target)
 	defer rl.EndTextureMode()
 	rl.ClearBackground(background)
@@ -579,7 +569,7 @@ func (grid HexGrid) pointPosition(point rl.Vector2) rl.Vector2 {
 	}
 }
 
-func (grid HexGrid) Render() {
+func (grid HexGrid) render() {
 	for _, point := range grid.points {
 		pointPosition := grid.pointPosition(point)
 		rl.DrawCircle(
@@ -841,10 +831,14 @@ func closestSnapPoint(tile *Tile, grid HexGrid) rl.Vector2 {
 	return closestPoint
 }
 
-func (game *Game) Update(_delta float32) {
+func (game *Game) update(_delta float32) {
 	if game.state == StateFailed {
 		if rl.IsKeyPressed(rl.KeySpace) || rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
-			gameScreen = createLevel1()
+			switch game.level {
+			case 1: gameScreen = createLevel1()
+			case 2: gameScreen = createLevel2()
+			default: assert(false, "Unimplemented")
+			}
 		}
 		return
 	}
@@ -853,10 +847,10 @@ func (game *Game) Update(_delta float32) {
 		if rl.IsKeyPressed(rl.KeySpace) || rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 			if game.level == 1 {
 				gameScreen = createLevel2()
-				currentScreen = ScreenGame
+				currentScene = &gameScreen
 			} else if game.level == 2 {
 				gameScreen = createLevel1()
-				currentScreen = ScreenMenu
+				currentScene = &menuScreen
 			} else {
 				assert(false, "Unreachable")
 			}
@@ -986,7 +980,7 @@ func (game Game) renderLevelCompleted() {
 	DrawText(text, halfWidth - size.X/2, halfHeight + size.Y*1.1, FontSizeS, foreground)
 }
 
-func (game Game) Render() {
+func (game Game) render() {
 	rl.BeginTextureMode(target)
 	defer rl.EndTextureMode()
 	rl.ClearBackground(background)
@@ -1023,9 +1017,9 @@ func (game Game) Render() {
 
 	game.possibleMovesPoints = nil
 
-	game.grid.Render()
+	game.grid.render()
 	for _, tile := range game.board.tiles {
-		tile.Render(&game)
+		tile.render(&game)
 	}
 
 	for _, point := range game.possibleMovesPoints {
@@ -1089,26 +1083,13 @@ func renderTargetTexture() {
 	rl.DrawTexturePro(target.Texture, r0, r1, rl.Vector2{}, 0.0, rl.White)
 }
 
-func updateCurrentScreen(delta float32) {
-	switch currentScreen {
-	case ScreenMenu:
-		menuScreen.Update(delta)
-		menuScreen.Render()
-	case ScreenGame:
-		gameScreen.Update(delta)
-		gameScreen.Render()
-	case ScreenTutorial:
-		tutorialScreen.Update(delta)
-		tutorialScreen.Render()
-	default:
-		assert(false, "Unreachable")
-	}
-}
-
 func updateFrame() {
 	delta := rl.GetFrameTime()
 	cursor = rl.MouseCursorDefault
-	updateCurrentScreen(delta)
+
+	currentScene.update(delta)
+	currentScene.render()
+
 	rl.SetMouseCursor(cursor)
 	renderTargetTexture()
 }
@@ -1129,7 +1110,11 @@ func RunGame() {
 	defer rl.UnloadRenderTexture(target)
 
 	rl.SetTextureFilter(target.Texture, rl.FilterBilinear)
-	//rl.SetMainLoop(updateFrame)
+	// Uncomment this to enable wasm build.
+	// rl.SetMainLoop(updateFrame)
+
+	// This is initialized here to avoid cycle initialization error.
+	currentScene = &menuScreen
 
 	for !rl.WindowShouldClose() {
 		if shouldQuit {
