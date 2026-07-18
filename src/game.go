@@ -54,6 +54,24 @@ func assert(condition bool, message string) {
 	}
 }
 
+const Pi = float32(math.Pi)
+
+func mod[T int32 | float32](x, y T) T {
+	return T(math.Mod(float64(x), float64(y)))
+}
+
+func abs[T int32 | float32](x T) T {
+	return T(math.Abs(float64(x)))
+}
+
+func cos(x float32) float32 {
+	return float32(math.Cos(float64(x)))
+}
+
+func sin(x float32) float32 {
+	return float32(math.Sin(float64(x)))
+}
+
 func play() {
 	if showTutorial {
 		currentScene = &tutorialScreen
