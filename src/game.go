@@ -123,12 +123,12 @@ const (
 	Pawn
 )
 
-func hexVertAngle(d Direction) float64 {
-	return math.Pi*2.0/6.0*float64(d)
+func hexVertAngle(d Direction) float32 {
+	return Pi*2.0/6.0*float32(d)
 }
 
-func hexFaceAngle(d Direction) float64 {
-	return math.Pi*2.0/6.0*float64(d) + math.Pi*0.5
+func hexFaceAngle(d Direction) float32 {
+	return Pi*2.0/6.0*float32(d) + Pi*0.5
 }
 
 func measureText(text string, textSize float32) rl.Vector2 {
@@ -203,8 +203,8 @@ func (tile HexTile) vertices() []rl.Vector2 {
 
 	for i := 0; i < 6; i++ {
 		angle := hexVertAngle(Direction(i))
-		offsetX := float32(math.Cos(angle))*distance
-		offsetY := float32(math.Sin(angle))*distance
+		offsetX := float32(cos(angle))*distance
+		offsetY := float32(sin(angle))*distance
 		verts = append(verts, rl.Vector2{x + offsetX, y + offsetY})
 	}
 	return verts
@@ -302,8 +302,8 @@ func (tile *HexTile) cancelMove() {
 func (tile *HexTile) createNeighbor(direction Direction, piece Piece) *HexTile {
 	angle := hexFaceAngle(direction)
 
-	neighborX := tile.position.X + float32(math.Cos(angle))*tileDefaultDistance*2.0
-	neighborY := tile.position.Y + float32(math.Sin(angle))*tileDefaultDistance*2.0
+	neighborX := tile.position.X + float32(cos(angle))*tileDefaultDistance*2.0
+	neighborY := tile.position.Y + float32(sin(angle))*tileDefaultDistance*2.0
 
 	neighbor := createTile(tile.board, neighborX, neighborY, tile.color, piece)
 	tile.neighbors[int(direction)] = neighbor
@@ -536,8 +536,8 @@ func createGrid(x, y float32, cols, rows int32) HexGrid {
 			points = append(points, point)
 			angle := hexFaceAngle(directions[directionIndex])
 
-			point.X += float32(math.Cos(angle))*tileDefaultDistance*2.0
-			point.Y += float32(math.Sin(angle))*tileDefaultDistance*2.0
+			point.X += float32(cos(angle))*tileDefaultDistance*2.0
+			point.Y += float32(sin(angle))*tileDefaultDistance*2.0
 
 			directionIndex = (directionIndex + 1) % 2
 		}
@@ -546,8 +546,8 @@ func createGrid(x, y float32, cols, rows int32) HexGrid {
 		point = rl.Vector2Zero()
 		angle := hexFaceAngle(Down)
 
-		point.X += float32(math.Cos(angle))*tileDefaultDistance*float32(i + 1)*2.0
-		point.Y += float32(math.Sin(angle))*tileDefaultDistance*float32(i + 1)*2.0
+		point.X += float32(cos(angle))*tileDefaultDistance*float32(i + 1)*2.0
+		point.Y += float32(sin(angle))*tileDefaultDistance*float32(i + 1)*2.0
 	}
 
 	area, offset := gridAreaAndPointOffset(points)
@@ -688,7 +688,6 @@ func createGame() Game {
 
 func createLevel1() Game {
 	game := createGame()
-
 	game.level = 1
 	game.movesLeft = 1
 
@@ -707,7 +706,6 @@ func createLevel1() Game {
 
 func createLevel2() Game {
 	game := createGame()
-
 	game.level = 2
 	game.movesLeft = 3
 
