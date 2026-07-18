@@ -31,7 +31,8 @@ const screenHeight = 720
 const halfWidth = screenWidth/2
 const halfHeight = screenHeight/2
 
-var debug = false
+var debug = true
+var showTutorial = false
 var shouldQuit = false
 
 var gameFont rl.Font
@@ -56,8 +57,7 @@ func assert(condition bool, message string) {
 }
 
 func play() {
-	goToTutorial := true
-	if goToTutorial {
+	if showTutorial {
 		currentScene = &tutorialScreen
 	} else {
 		startGame()
@@ -119,19 +119,19 @@ func measureText(text string, textSize float32) rl.Vector2 {
 	return rl.MeasureTextEx(gameFont, text, textSize, 4.0)
 }
 
-type Tile struct {
+type HexTile struct {
 	piece Piece
 	board *Board
 	color rl.Color
 	position rl.Vector2
 	moveOffset rl.Vector2
 	moveOffsetApplied bool
-	neighbors [6]*Tile
+	neighbors [6]*HexTile
 	visited bool // whether tile was visited in a iteration
 }
 
-func createTile(board *Board, x, y float32, color rl.Color, piece Piece) *Tile {
-	tile := &Tile{
+func createTile(board *Board, x, y float32, color rl.Color, piece Piece) *HexTile {
+	tile := &HexTile{
 		piece: piece,
 		board: board,
 		color: color,
@@ -145,7 +145,7 @@ func createTile(board *Board, x, y float32, color rl.Color, piece Piece) *Tile {
 }
 
 // @note: allow callback parameter allow us to include or not the passed tile
-func (tile *Tile) iterateConnectedTiles(callback func (*Tile), allowCallback bool) {
+func (tile *HexTile) iterateConnectedTiles(callback func (*HexTile), allowCallback bool) {
 	if tile.visited {
 		return
 	}
@@ -163,18 +163,18 @@ func (tile *Tile) iterateConnectedTiles(callback func (*Tile), allowCallback boo
 }
 
 // @note: offseted position refers to tile position when being dragged around
-func (tile Tile) offsetedPosition() rl.Vector2 {
+func (tile HexTile) offsetedPosition() rl.Vector2 {
 	return rl.Vector2{
 		tile.position.X + tile.moveOffset.X,
 		tile.position.Y + tile.moveOffset.Y,
 	}
 }
 
-func (tile Tile) isMoving() bool {
+func (tile HexTile) isMoving() bool {
 	return tile.moveOffset != rl.Vector2Zero()
 }
 
-func (tile Tile) vertices() []rl.Vector2 {
+func (tile HexTile) vertices() []rl.Vector2 {
 	verts := []rl.Vector2{}
 
 	distance := tileDefaultDistance
@@ -192,7 +192,7 @@ func (tile Tile) vertices() []rl.Vector2 {
 	return verts
 }
 
-func (tile Tile) onlyRender(highlight bool, selected bool) {
+func (tile HexTile) onlyRender(highlight bool, selected bool) {
 	color := tile.color
 	if highlight {
 		color = rl.ColorBrightness(color, 0.2)
@@ -215,7 +215,7 @@ func (tile Tile) onlyRender(highlight bool, selected bool) {
 	}
 }
 
-func (tile Tile) onlyRenderPiece() {
+func (tile HexTile) onlyRenderPiece() {
 	position := tile.offsetedPosition()
 
 	position.X -= 25
@@ -227,7 +227,7 @@ func (tile Tile) onlyRenderPiece() {
 	}}
 }
 
-func (tile *Tile) render(game *Game) {
+func (tile *HexTile) render(game *Game) {
 	position := tile.offsetedPosition()
 
 	selected := tile == game.selectedTile
@@ -260,28 +260,28 @@ func (tile *Tile) render(game *Game) {
 	}
 }
 
-func (tile *Tile) move(x, y float32) {
-	tile.iterateConnectedTiles(func (it *Tile) {
+func (tile *HexTile) move(x, y float32) {
+	tile.iterateConnectedTiles(func (it *HexTile) {
 		it.moveOffset.X = x
 		it.moveOffset.Y = y
 	}, true)
 }
 
-func (tile *Tile) applyMove() {
-	tile.iterateConnectedTiles(func (it *Tile) {
+func (tile *HexTile) applyMove() {
+	tile.iterateConnectedTiles(func (it *HexTile) {
 		it.position.X += it.moveOffset.X
 		it.position.Y += it.moveOffset.Y
 		it.moveOffset = rl.Vector2Zero()
 	}, true)
 }
 
-func (tile *Tile) cancelMove() {
-	tile.iterateConnectedTiles(func (it *Tile) {
+func (tile *HexTile) cancelMove() {
+	tile.iterateConnectedTiles(func (it *HexTile) {
 		it.moveOffset = rl.Vector2Zero()
 	}, true)
 }
 
-func (tile *Tile) createNeighbor(direction Direction, piece Piece) *Tile {
+func (tile *HexTile) createNeighbor(direction Direction, piece Piece) *HexTile {
 	angle := hexFaceAngle(direction)
 
 	neighborX := tile.position.X + float32(math.Cos(angle))*tileDefaultDistance*2.0
@@ -465,7 +465,7 @@ func (tutorial Tutorial) render() {
 			neighbor.color = rl.DarkGreen
 		}
 
-		tile.iterateConnectedTiles(func (tile *Tile) {
+		tile.iterateConnectedTiles(func (tile *HexTile) {
 			tile.onlyRender(false, false)
 			tile.onlyRenderPiece()
 		}, true)
@@ -483,62 +483,69 @@ func (tutorial Tutorial) render() {
 		neighbor = neighbor.createNeighbor(Up, Empty)
 		neighbor.color = rl.DarkGreen
 
-		tile.iterateConnectedTiles(func (tile *Tile) {
+		tile.iterateConnectedTiles(func (tile *HexTile) {
 			tile.onlyRender(false, false)
 			tile.onlyRenderPiece()
 		}, true)
 	}
 }
 
-// @todo: fix naming convention, here we specify HexGrid but tile we call it
-// Tile not HexTile
 type HexGrid struct {
 	cols int32
 	rows int32
 	area rl.Rectangle
-	// the current way of generating hexagon grids defines points outside of
-	// the area they should be, which make them negative, this offset is used
-	// to render them in the right area
+	// An Y offset to each point so they can be rendered correctly inside the
+	// retangular grid area.
 	areaOffset float32
-	// @todo: we could replace position with area 'x and 'y
-	position rl.Vector2
 	points []rl.Vector2
 }
 
+// Create a hexagon grid.
+// In the current grid creation logic the first row of points are defined
+// outside of the grid area, so we use gridAreaAndPointOffset() to take the
+// grid area and an offset to be applied when a point position is required,
+// this allows draw each point inside of the grid area, making it easy to
+// correctly position the grid in the world.
 func createGrid(x, y float32, cols, rows int32) HexGrid {
 	point := rl.Vector2{}
 	points := []rl.Vector2{}
+
 	directionIndex := 0
 	directions := []Direction{ UpRight, DownRight }
+
 	for i := int32(0); i < cols; i++ {
 		for j := int32(0); j < rows; j++ {
 			points = append(points, point)
 			angle := hexFaceAngle(directions[directionIndex])
+
 			point.X += float32(math.Cos(angle))*tileDefaultDistance*2.0
 			point.Y += float32(math.Sin(angle))*tileDefaultDistance*2.0
+
 			directionIndex = (directionIndex + 1) % 2
 		}
 		directionIndex = 0
+
 		point = rl.Vector2Zero()
 		angle := hexFaceAngle(Down)
+
 		point.X += float32(math.Cos(angle))*tileDefaultDistance*float32(i + 1)*2.0
 		point.Y += float32(math.Sin(angle))*tileDefaultDistance*float32(i + 1)*2.0
 	}
-	area, offset := gridAreaFromPoints(points)
+
+	area, offset := gridAreaAndPointOffset(points)
 	return HexGrid{
 		cols: cols,
 		rows: rows,
 		area: area,
-		areaOffset: offset,
 		points: points,
-		position: rl.Vector2{ x, y },
+		areaOffset: offset,
 	}
 }
 
-// @todo: better define this function, it's not clear why it should return
-// two values
-func gridAreaFromPoints(points []rl.Vector2) (rl.Rectangle, float32) {
+// Returns the grid rectangular area and the points offset.
+func gridAreaAndPointOffset(points []rl.Vector2) (rl.Rectangle, float32) {
 	var minX, minY, maxX, maxY float32
+
 	for _, point := range points {
 		if point.X < minX {
 			minX = point.X
@@ -551,10 +558,13 @@ func gridAreaFromPoints(points []rl.Vector2) (rl.Rectangle, float32) {
 			maxY = point.Y
 		}
 	}
+
 	offset := float32(math.Abs(float64(minY)))
 	assert(minY < 0, "Minimum Y should be negative")
+
 	minY = 0
 	maxY += offset 
+
 	return rl.Rectangle{
 		minX, minY,
 		minX + maxX,
@@ -564,8 +574,8 @@ func gridAreaFromPoints(points []rl.Vector2) (rl.Rectangle, float32) {
 
 func (grid HexGrid) pointPosition(point rl.Vector2) rl.Vector2 {
 	return rl.Vector2{
-		point.X + grid.position.X,
-		point.Y + grid.position.Y + grid.areaOffset,
+		point.X + grid.area.X,
+		point.Y + grid.area.Y + grid.areaOffset,
 	}
 }
 
@@ -583,10 +593,10 @@ func (grid HexGrid) render() {
 // can have a pointer to a board instead of having a pointer to a list of
 // pointer tiles
 type Board struct {
-	tiles []*Tile
+	tiles []*HexTile
 }
 
-func (board *Board) isTileNeighbor(tileA, tileB *Tile) bool {
+func (board *Board) isTileNeighbor(tileA, tileB *HexTile) bool {
 	tileAPosition := tileA.offsetedPosition()
 	tileBPosition := tileB.offsetedPosition()
 
@@ -594,7 +604,7 @@ func (board *Board) isTileNeighbor(tileA, tileB *Tile) bool {
 	return distance <= tileDefaultDistance*2.1 // @hack: 2.1 for error correction
 }
 
-func (board *Board) isTileDiagonal(tileA, tileB *Tile) bool {
+func (board *Board) isTileDiagonal(tileA, tileB *HexTile) bool {
 	tileAPosition := tileA.offsetedPosition()
 	tileBPosition := tileB.offsetedPosition()
 
@@ -647,21 +657,19 @@ type Game struct {
 	// if this is true build is disabled
 	alreadyMoved bool
 	// hovered tile used to highlight tile under cursor
-	hoveredTile *Tile
+	hoveredTile *HexTile
 	// selected tile refers to the first tile being moved
-	selectedTile *Tile
+	selectedTile *HexTile
 	movingOrigin rl.Vector2
 	// store possible move points to be draw after everything else
 	possibleMovesPoints []rl.Vector2
 }
 
 func createGame() Game {
-	grid := createGrid(screenWidth*0.25, screenHeight*0.25, 4, 5)
-	grid.position = rl.Vector2{
-		halfWidth  - grid.area.Width /2,
-		halfHeight - grid.area.Height/2,
-	}
-
+	grid := createGrid(0, 0, 4, 5)
+	// Centering grid on the screen.
+	grid.area.X = halfWidth - grid.area.Width /2
+	grid.area.Y = halfWidth - grid.area.Height/2
 	return Game{ grid: grid }
 }
 
@@ -728,15 +736,15 @@ func (game Game) isLevelCompleted() bool {
 	return game.movesLeft >= 0 && pieceCount == 1
 }
 
-func (game Game) isAnyTileColliding(tile *Tile) bool {
-	tiles := map[*Tile]bool{}
+func (game Game) isAnyTileColliding(tile *HexTile) bool {
+	tiles := map[*HexTile]bool{}
 
-	tile.iterateConnectedTiles(func (it *Tile) {
+	tile.iterateConnectedTiles(func (it *HexTile) {
 		tiles[it] = true
 	}, true)
 
 	collided := false
-	tile.iterateConnectedTiles(func (it *Tile) {
+	tile.iterateConnectedTiles(func (it *HexTile) {
 		if collided {
 			return
 		}
@@ -756,8 +764,8 @@ func (game Game) isAnyTileColliding(tile *Tile) bool {
 	return collided
 }
 
-func moveTilePiece(tile *Tile, newTile *Tile) bool {
-	assert(tile != nil, "Tile is nil")
+func moveTilePiece(tile *HexTile, newTile *HexTile) bool {
+	assert(tile != nil, "HexTile is nil")
 	assert(newTile != nil, "End tile is nil")
 
 	moveMade := false
@@ -771,8 +779,8 @@ func moveTilePiece(tile *Tile, newTile *Tile) bool {
 	return moveMade
 }
 
-func possibleMoves(tile *Tile) []*Tile {
-	tiles := []*Tile{}
+func possibleMoves(tile *HexTile) []*HexTile {
+	tiles := []*HexTile{}
 	switch tile.piece {
 	case Empty:
 		return tiles
@@ -797,7 +805,7 @@ func possibleMoves(tile *Tile) []*Tile {
 	return tiles
 }
 
-func selectTile(tiles []*Tile, mousePosition rl.Vector2) *Tile {
+func selectTile(tiles []*HexTile, mousePosition rl.Vector2) *HexTile {
 	for _, tile := range tiles {
 		if tile == nil {
 			continue
@@ -810,7 +818,7 @@ func selectTile(tiles []*Tile, mousePosition rl.Vector2) *Tile {
 	return nil
 }
 
-func closestSnapPoint(tile *Tile, grid HexGrid) rl.Vector2 {
+func closestSnapPoint(tile *HexTile, grid HexGrid) rl.Vector2 {
 	pointFound := false
 
 	closestPoint := rl.Vector2Zero()
@@ -1000,18 +1008,13 @@ func (game Game) render() {
 		infoMode := fmt.Sprint("mode: ", game.mode)
 		LiveInfo(infoMode)
 
-		infoHovered := fmt.Sprint("hovered: ", game.hoveredTile)
+		infoHovered := fmt.Sprintf("hovered: %p", game.hoveredTile)
 		LiveInfo(infoHovered)
 
-		infoSelected := fmt.Sprint("selected: ", game.selectedTile)
+		infoSelected := fmt.Sprintf("selected: %p", game.selectedTile)
 		LiveInfo(infoSelected)
 
-		infoSnap := "snap: No tile selected"
-		LiveInfo(infoSnap)
-
 		area := game.grid.area
-		area.X += game.grid.position.X
-		area.Y += game.grid.position.Y
 		rl.DrawRectangleLinesEx(area, 2.0, rl.Red)
 	}
 
@@ -1047,7 +1050,10 @@ func (game Game) render() {
 	DrawText(text, halfWidth - size.X/2, screenHeight*0.8 + FontSizeM*1.1, FontSizeS, rl.White)
 
 	movesLeft := fmt.Sprint("moves left: ", game.movesLeft)
-	DrawText(movesLeft, 20.0, 20.0, FontSizeM, rl.White)
+	// Hide moves left to avoid conflit with debug informations.
+	if !debug {
+		DrawText(movesLeft, 20.0, 20.0, FontSizeM, rl.White)
+	}
 
 	renderRestartHint()
 
