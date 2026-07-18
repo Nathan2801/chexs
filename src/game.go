@@ -18,12 +18,10 @@ const (
 
 const gameName = "CHEXS"
 
-// @note: not sure about this note
-// @note: refers to the distance between tile center and borders, multiplies to
-// two to get the distance adjacent tile point distance
+// A value that multiplied by 2 gives the distance between adjacent tiles.
 const tileDefaultDistance float32 = 40.0
-// @hack: I do not trust this to handle different environments
-const tileDiagonalDistance float32 = tileDefaultDistance*2.0*1.72
+// An approximation of the distance of "diagonals" tiles.
+const tileDiagonalDistance float32 = tileDefaultDistance*2.0*1.72 // @hack
 
 const screenWidth = 720
 const screenHeight = 720
@@ -127,7 +125,8 @@ type HexTile struct {
 	moveOffset rl.Vector2
 	moveOffsetApplied bool
 	neighbors [6]*HexTile
-	visited bool // whether tile was visited in a iteration
+	// Whether tile was visited in a iteration, check iterateConnectedTiles().
+	visited bool
 }
 
 func createTile(board *Board, x, y float32, color rl.Color, piece Piece) *HexTile {
@@ -144,7 +143,8 @@ func createTile(board *Board, x, y float32, color rl.Color, piece Piece) *HexTil
 	return board.tiles[len(board.tiles) - 1]
 }
 
-// @note: allow callback parameter allow us to include or not the passed tile
+// Iterate all connected tiles (aka. island), if allowCallback is true then the
+// received tile is also passed to the callback function.
 func (tile *HexTile) iterateConnectedTiles(callback func (*HexTile), allowCallback bool) {
 	if tile.visited {
 		return
@@ -162,7 +162,7 @@ func (tile *HexTile) iterateConnectedTiles(callback func (*HexTile), allowCallba
 	tile.visited = false
 }
 
-// @note: offseted position refers to tile position when being dragged around
+// Tile actual position, even when being moved.
 func (tile HexTile) offsetedPosition() rl.Vector2 {
 	return rl.Vector2{
 		tile.position.X + tile.moveOffset.X,
@@ -235,7 +235,7 @@ func (tile *HexTile) render(game *Game) {
 
 	tile.onlyRender(highlight, selected)
 
-	// @note: debug center of tiles
+	// Draw little dots on tiles center.
 	if debug {
 		centerColor := rl.White
 		if highlight {
@@ -589,9 +589,6 @@ func (grid HexGrid) render() {
 	}
 }
 
-// @note: even tho board has a single element we define it like this so tile
-// can have a pointer to a board instead of having a pointer to a list of
-// pointer tiles
 type Board struct {
 	tiles []*HexTile
 }
@@ -654,14 +651,12 @@ type Game struct {
 	board Board
 	grid HexGrid
 	movesLeft int
-	// if this is true build is disabled
+	// If this is true switching to build mode is disabled.
 	alreadyMoved bool
-	// hovered tile used to highlight tile under cursor
 	hoveredTile *HexTile
-	// selected tile refers to the first tile being moved
 	selectedTile *HexTile
 	movingOrigin rl.Vector2
-	// store possible move points to be draw after everything else
+	// Store possible move points so they can be draw above everything.
 	possibleMovesPoints []rl.Vector2
 }
 
