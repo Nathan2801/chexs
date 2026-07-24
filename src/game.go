@@ -1,5 +1,6 @@
 package game
 
+import "os"
 import "fmt"
 import "math"
 import rl "github.com/gen2brain/raylib-go/raylib"
@@ -1127,8 +1128,9 @@ func RunGame() {
 	defer rl.UnloadRenderTexture(target)
 
 	rl.SetTextureFilter(target.Texture, rl.FilterBilinear)
-	// Uncomment this to enable wasm build.
-	// rl.SetMainLoop(updateFrame)
+	if os.Getenv("GOOS") == "js" {
+		rl.SetMainLoop(updateFrame)
+	}
 
 	// This is initialized here to avoid cycle initialization error.
 	currentScene = &menuScreen
