@@ -30,7 +30,7 @@ const halfWidth = screenWidth/2
 const halfHeight = screenHeight/2
 
 var debug = true
-var showTutorial = false
+var showTutorial = true
 var shouldQuit = false
 
 var gameFont rl.Font
