@@ -2,7 +2,8 @@ package main
 
 import "embed"
 import "game/src"
-import _ "github.com/gen2brain/raylib-go/raylib"
+// Uncomment this for wasm.
+//import rl "github.com/gen2brain/raylib-go/raylib"
 
 // REQUIRED CODE FOR LOADING ASSETS ON WEB
 //
@@ -10,6 +11,7 @@ import _ "github.com/gen2brain/raylib-go/raylib"
 var ASSETS embed.FS
 
 func init() {
+	// Uncomment this for wasm.
 	//rl.AddFileSystem(ASSETS)
 }
 
