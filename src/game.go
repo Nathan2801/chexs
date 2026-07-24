@@ -1,6 +1,5 @@
 package game
 
-import "os"
 import "fmt"
 import "math"
 import rl "github.com/gen2brain/raylib-go/raylib"
@@ -1105,6 +1104,9 @@ func updateFrame() {
 	delta := rl.GetFrameTime()
 	cursor = rl.MouseCursorDefault
 
+	if currentScene == nil {
+		panic("Scene not defined for rendering")
+	}
 	currentScene.update(delta)
 	currentScene.render()
 
@@ -1115,6 +1117,9 @@ func updateFrame() {
 func RunGame() {
 	rl.InitWindow(screenWidth, screenHeight, "Game")
 	defer rl.CloseWindow()
+
+	// This is initialized here to avoid cycle initialization error.
+	currentScene = &menuScreen
 
 	gameFont = rl.LoadFontEx("./assets/arvo/Arvo-Bold.ttf", 96, nil, 250)
 	defer rl.UnloadFont(gameFont)
@@ -1128,12 +1133,8 @@ func RunGame() {
 	defer rl.UnloadRenderTexture(target)
 
 	rl.SetTextureFilter(target.Texture, rl.FilterBilinear)
-	if os.Getenv("GOOS") == "js" {
-		rl.SetMainLoop(updateFrame)
-	}
-
-	// This is initialized here to avoid cycle initialization error.
-	currentScene = &menuScreen
+	// Uncomment this for wasm.
+	rl.SetMainLoop(updateFrame)
 
 	for !rl.WindowShouldClose() {
 		if shouldQuit {

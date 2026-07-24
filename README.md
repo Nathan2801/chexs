@@ -50,6 +50,15 @@ git submodule init   # Required for Raylib-Go-Wasm
 git submodule update # Required for Raylib-Go-Wasm
 ```
 
+> [!NOTE]
+> You should uncomment one line in `src/game.go` to enable raylib SetMainLoop
+> function, and two lines in `main.go` to enable assets loading. You can search
+> for: `Uncomment this for wasm`.
+
+```powershell
+.\make.ps1 wasm
+```
+
 ## Thanks
 
 - [Master484](https://opengameart.org/users/master484) for the [pawn sprite](https://opengameart.org/content/m484-chess-set).
