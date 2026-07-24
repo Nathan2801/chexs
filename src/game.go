@@ -1118,6 +1118,9 @@ func RunGame() {
 	rl.InitWindow(screenWidth, screenHeight, "Game")
 	defer rl.CloseWindow()
 
+	// This is initialized here to avoid cycle initialization error.
+	currentScene = &menuScreen
+
 	gameFont = rl.LoadFontEx("./assets/arvo/Arvo-Bold.ttf", 96, nil, 250)
 	defer rl.UnloadFont(gameFont)
 
@@ -1132,9 +1135,6 @@ func RunGame() {
 	rl.SetTextureFilter(target.Texture, rl.FilterBilinear)
 	// Uncomment this for wasm.
 	//rl.SetMainLoop(updateFrame)
-
-	// This is initialized here to avoid cycle initialization error.
-	currentScene = &menuScreen
 
 	for !rl.WindowShouldClose() {
 		if shouldQuit {
