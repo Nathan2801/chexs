@@ -3,7 +3,7 @@
 
 A simple chess puzzle game written for the [Raylib 6.x GameJam](https://itch.io/jam/raylib-6x-gamejam).
 
-[![Chexs on Itch.io](https://img.shields.io/badge/Itch-%23FF0B34.svg?style=for-the-badge&logo=Itch.io&logoColor=white)](https://sokobo.itch.io/chexs)
+:video_game: You can play Chexs [here](https://sokobo.itch.io/chexs).
 
 ## Theme
 
@@ -22,7 +22,7 @@ Island are group of tiles that contains pieces, in build mode, click and drag
 islands to build the puzzle.
 
 After the puzzle is built you can press <kbd>Space</kbd> to switch to solve
-mode, then yuo can move pieces, but after a single move is done you cannot go
+mode, then you can move pieces, but after a single move is done you cannot go
 into build mode anymore.
 
 In this version there is only pawns pieces, pawns moves towards hexagons faces,
@@ -31,7 +31,7 @@ a hexagon vertice.
 
 ## Building Project
 
-### Windows (Desktop)
+### For Windows Using Powershell
 
 ```powershell
 git clone https://github.com/Nathan2801/chexs/
@@ -41,7 +41,7 @@ git submodule update # Required for Raylib-Go-Wasm
 .\make.ps1
 ```
 
-### Windows (Wasm)
+### For Browser Using Powershell
 
 ```powershell
 git clone https://github.com/Nathan2801/chexs/
