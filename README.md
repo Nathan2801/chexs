@@ -31,18 +31,24 @@ a hexagon vertice.
 
 ## Building Project
 
-### For Desktop
+### Windows (Desktop)
 
-```shell
+```powershell
 git clone https://github.com/Nathan2801/chexs/
 cd chexs
-go build .
+git submodule init
+git submodule update
+.\make.ps1
 ```
 
-### For Browser
+### Windows (Wasm)
 
-```shell
+```powershell
 git clone https://github.com/Nathan2801/chexs/
+cd chexs
+git submodule init
+git submodule update
+.\make.ps1 wasm
 ```
 
 ## Thanks
