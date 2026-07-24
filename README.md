@@ -36,8 +36,8 @@ a hexagon vertice.
 ```powershell
 git clone https://github.com/Nathan2801/chexs/
 cd chexs
-git submodule init
-git submodule update
+git submodule init   # Required for Raylib-Go-Wasm
+git submodule update # Required for Raylib-Go-Wasm
 .\make.ps1
 ```
 
@@ -46,9 +46,8 @@ git submodule update
 ```powershell
 git clone https://github.com/Nathan2801/chexs/
 cd chexs
-git submodule init
-git submodule update
-.\make.ps1 wasm
+git submodule init   # Required for Raylib-Go-Wasm
+git submodule update # Required for Raylib-Go-Wasm
 ```
 
 ## Thanks

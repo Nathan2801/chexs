@@ -11,7 +11,7 @@ require (
 )
 
 replace (
-	github.com/gen2brain/raylib-go/raygui => ./Raylib-Go-Wasm/raygui
-	github.com/gen2brain/raylib-go/raylib => ./Raylib-Go-Wasm/raylib
-	github.com/BrownNPC/Raylib-Go-Wasm/wasm-runtime => ./Raylib-Go-Wasm/wasm-runtime
+	github.com/gen2brain/raylib-go/raygui => ./external/Raylib-Go-Wasm/raygui
+	github.com/gen2brain/raylib-go/raylib => ./external/Raylib-Go-Wasm/raylib
+	github.com/BrownNPC/Raylib-Go-Wasm/wasm-runtime => ./external/Raylib-Go-Wasm/wasm-runtime
 )
